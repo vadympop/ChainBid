@@ -7,12 +7,19 @@ contract EnglishAuction is BaseAuction {
     address public highestBidder;
     uint256 public highestBid;
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         AuctionItem memory _item,
         address payable _seller,
         uint256 _duration,
         uint256 _reservePrice
-    ) BaseAuction(_item, _seller, _duration, _reservePrice) {}
+    ) external initializer {
+        __BaseAuction_init(_item, _seller, _duration, _reservePrice);
+    }
 
     function bid() external payable override onlyActive nonReentrant {
         require(msg.sender != seller, "Seller cannot bid");

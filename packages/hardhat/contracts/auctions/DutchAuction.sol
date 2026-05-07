@@ -8,13 +8,19 @@ contract DutchAuction is BaseAuction {
     uint256 public duration;
     uint256 public startTime;
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         AuctionItem memory _item,
         address payable _seller,
         uint256 _startPrice,
         uint256 _reservePrice,
         uint256 _duration
-    ) BaseAuction(_item, _seller, _duration, _reservePrice) {
+    ) external initializer {
+        __BaseAuction_init(_item, _seller, _duration, _reservePrice);
         startPrice = _startPrice;
         duration = _duration;
         startTime = block.timestamp;
