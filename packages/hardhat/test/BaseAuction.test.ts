@@ -35,7 +35,8 @@ describe("BaseAuction", function () {
       metadataURI: "",
     };
 
-    mockAuction = await AuctionFactory.deploy(item, owner.address, 3600, ethers.parseEther("1"));
+    mockAuction = await AuctionFactory.deploy();
+    await mockAuction.initialize(item, owner.address, 3600, ethers.parseEther("1"));
   });
 
   describe("Escrow and Transfer", function () {

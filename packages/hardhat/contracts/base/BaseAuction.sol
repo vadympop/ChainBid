@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
@@ -8,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "../items/AuctionItem.sol";
 
-abstract contract BaseAuction is ReentrancyGuard, ERC721Holder, ERC1155Holder {
+abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, ERC1155Holder {
     AuctionItem public item;
     address payable public seller;
     uint256 public endTime;
@@ -39,12 +40,12 @@ abstract contract BaseAuction is ReentrancyGuard, ERC721Holder, ERC1155Holder {
         _;
     }
 
-    constructor(
+    function __BaseAuction_init(
         AuctionItem memory _item,
         address payable _seller,
         uint256 _duration,
         uint256 _reservePrice
-    ) {
+    ) internal onlyInitializing {
         item = _item;
         seller = _seller;
         endTime = block.timestamp + _duration;

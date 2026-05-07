@@ -5,12 +5,16 @@ import "../base/BaseAuction.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract MockBaseAuction is BaseAuction {
-    constructor(
+    constructor() {}
+
+    function initialize(
         AuctionItem memory _item,
         address payable _seller,
         uint256 _duration,
         uint256 _reservePrice
-    ) BaseAuction(_item, _seller, _duration, _reservePrice) {}
+    ) external initializer {
+        __BaseAuction_init(_item, _seller, _duration, _reservePrice);
+    }
 
     function bid() external payable override {}
     function finalize() external override {}
