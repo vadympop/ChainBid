@@ -16,28 +16,37 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
 
   const mockContract = await hre.ethers.getContractAt("MockERC721", mockToken.address);
 
-  // 2. Mint tokens to deployer
-  const tokenId1 = 1n;
-  const tokenId2 = 2n;
+  // 2. Mint unique tokens to deployer
+  const timestamp = BigInt(Date.now());
+  const tokenId1 = timestamp;
+  const tokenId2 = timestamp + 1n;
 
-  try {
-    await mockContract.ownerOf(tokenId1);
-  } catch {
-    await mockContract.mint(deployer, tokenId1);
-  }
-  try {
-    await mockContract.ownerOf(tokenId2);
-  } catch {
-    await mockContract.mint(deployer, tokenId2);
-  }
+  await mockContract.mint(deployer, tokenId1, { gasLimit: 200_000 });
+  await mockContract.mint(deployer, tokenId2, { gasLimit: 200_000 });
 
   // 3. Get deployed Factory
   const factoryDeployment = await hre.deployments.get("AuctionFactory");
   const factory = await hre.ethers.getContractAt("AuctionFactory", factoryDeployment.address);
   const deployerSigner = await hre.ethers.provider.getSigner(deployer);
 
-  // Approve Factory for all (since we want to create multiple auctions)
-  await mockContract.connect(deployerSigner).setApprovalForAll(factoryDeployment.address, true);
+  const factoryAddress = factoryDeployment.address;
+  const factoryNonce = await hre.ethers.provider.getTransactionCount(factoryAddress);
+
+  // Predict English Auction clone address (nonce)
+  const englishCloneAddress = hre.ethers.getCreateAddress({
+    from: factoryAddress,
+    nonce: factoryNonce,
+  });
+
+  // Predict Dutch Auction clone address (nonce + 1)
+  const dutchCloneAddress = hre.ethers.getCreateAddress({
+    from: factoryAddress,
+    nonce: factoryNonce + 1,
+  });
+
+  // Approve the predicted clone addresses
+  await mockContract.connect(deployerSigner).approve(englishCloneAddress, tokenId1, { gasLimit: 200_000 });
+  await mockContract.connect(deployerSigner).approve(dutchCloneAddress, tokenId2, { gasLimit: 200_000 });
 
   const duration = 3600; // 1 hour
 
@@ -52,7 +61,9 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
   const englishReserve = parseEther("1");
 
   console.log("Creating English Auction...");
-  const tx1 = await factory.connect(deployerSigner).createEnglishAuction(englishItem, englishReserve, duration);
+  const tx1 = await factory
+    .connect(deployerSigner)
+    .createEnglishAuction(englishItem, englishReserve, duration, { gasLimit: 1_000_000 });
   await tx1.wait();
   console.log("English Auction created.");
 
@@ -68,7 +79,9 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
   const dutchReserve = parseEther("2");
 
   console.log("Creating Dutch Auction...");
-  const tx2 = await factory.connect(deployerSigner).createDutchAuction(dutchItem, dutchStart, dutchReserve, duration);
+  const tx2 = await factory
+    .connect(deployerSigner)
+    .createDutchAuction(dutchItem, dutchStart, dutchReserve, duration, { gasLimit: 1_000_000 });
   await tx2.wait();
   console.log("Dutch Auction created.");
 };
