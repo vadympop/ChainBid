@@ -94,4 +94,60 @@ describe("DutchAuction", function () {
     await time.increase(duration * 2);
     expect(await auction.getCurrentPrice()).to.equal(reservePrice);
   });
+
+  it("createDutchAuction() reverts when start price is below reserve price", async function () {
+    const FactoryFactory = await ethers.getContractFactory("AuctionFactory");
+    const factory = await FactoryFactory.deploy();
+
+    const invalidTokenId = 2;
+    await mockERC721.mint(seller.address, invalidTokenId);
+
+    const txCount = await ethers.provider.getTransactionCount(await factory.getAddress());
+    const expectedAddress = ethers.getCreateAddress({
+      from: await factory.getAddress(),
+      nonce: txCount,
+    });
+
+    await mockERC721.connect(seller).approve(expectedAddress, invalidTokenId);
+
+    const item = {
+      itemType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: invalidTokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(
+      factory.connect(seller).createDutchAuction(item, ethers.parseEther("1"), ethers.parseEther("2"), duration),
+    ).to.be.revertedWith("Start price below reserve price");
+  });
+
+  it("createDutchAuction() reverts when duration is zero", async function () {
+    const FactoryFactory = await ethers.getContractFactory("AuctionFactory");
+    const factory = await FactoryFactory.deploy();
+
+    const invalidTokenId = 3;
+    await mockERC721.mint(seller.address, invalidTokenId);
+
+    const txCount = await ethers.provider.getTransactionCount(await factory.getAddress());
+    const expectedAddress = ethers.getCreateAddress({
+      from: await factory.getAddress(),
+      nonce: txCount,
+    });
+
+    await mockERC721.connect(seller).approve(expectedAddress, invalidTokenId);
+
+    const item = {
+      itemType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: invalidTokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createDutchAuction(item, startPrice, reservePrice, 0)).to.be.revertedWith(
+      "Duration must be greater than zero",
+    );
+  });
 });

@@ -20,6 +20,9 @@ contract DutchAuction is BaseAuction {
         uint256 _reservePrice,
         uint256 _duration
     ) external initializer {
+        require(_duration > 0, "Duration must be greater than zero");
+        require(_startPrice >= _reservePrice, "Start price below reserve price");
+
         __BaseAuction_init(_item, _seller, _duration, _reservePrice);
         startPrice = _startPrice;
         duration = _duration;
