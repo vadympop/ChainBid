@@ -9,6 +9,8 @@ import "../auctions/EnglishAuction.sol";
 import "../auctions/DutchAuction.sol";
 
 contract AuctionFactory {
+    uint256 public constant MIN_AUCTION_DURATION = 10 minutes;
+
     struct AuctionRecord {
         address contractAddress;
         AuctionType auctionType;
@@ -34,6 +36,9 @@ contract AuctionFactory {
         uint256 reservePrice,
         uint256 duration
     ) external returns (address) {
+        _validateItem(item);
+        _validateDuration(duration);
+
         address clone = Clones.clone(englishImpl);
         EnglishAuction(clone).initialize(item, payable(msg.sender), duration, reservePrice);
         _escrowItem(item, msg.sender, clone);
@@ -48,12 +53,30 @@ contract AuctionFactory {
         uint256 reservePrice,
         uint256 duration
     ) external returns (address) {
+        _validateItem(item);
+        _validateDuration(duration);
+        require(startPrice >= reservePrice, "Start price below reserve price");
+
         address clone = Clones.clone(dutchImpl);
         DutchAuction(clone).initialize(item, payable(msg.sender), startPrice, reservePrice, duration);
         _escrowItem(item, msg.sender, clone);
 
         _register(clone, AuctionType.Dutch, msg.sender);
         return clone;
+    }
+
+    function _validateDuration(uint256 duration) internal pure {
+        require(duration >= MIN_AUCTION_DURATION, "Duration must be at least 10 minutes");
+    }
+
+    function _validateItem(AuctionItem memory item) internal pure {
+        require(item.tokenContract != address(0), "Token contract cannot be zero");
+
+        if (item.tokenType == TokenType.ERC721) {
+            require(item.amount == 1, "ERC721 amount must be 1");
+        } else if (item.tokenType == TokenType.ERC1155) {
+            require(item.amount > 0, "ERC1155 amount must be greater than zero");
+        }
     }
 
     function _escrowItem(AuctionItem memory item, address seller, address auctionAddress) internal {

@@ -187,7 +187,7 @@ describe("DutchAuction", function () {
     ).to.be.revertedWith("Start price below reserve price");
   });
 
-  it("createDutchAuction() reverts when duration is zero", async function () {
+  it("createDutchAuction() reverts when duration is below 10 minutes", async function () {
     const FactoryFactory = await ethers.getContractFactory("AuctionFactory");
     const factory = await FactoryFactory.deploy();
 
@@ -205,8 +205,8 @@ describe("DutchAuction", function () {
       metadataURI: "",
     };
 
-    await expect(factory.connect(seller).createDutchAuction(item, startPrice, reservePrice, 0)).to.be.revertedWith(
-      "Duration must be greater than zero",
+    await expect(factory.connect(seller).createDutchAuction(item, startPrice, reservePrice, 599)).to.be.revertedWith(
+      "Duration must be at least 10 minutes",
     );
   });
 });

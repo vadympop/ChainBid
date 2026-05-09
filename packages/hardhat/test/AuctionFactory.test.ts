@@ -4,6 +4,7 @@ import { ethers } from "hardhat";
 describe("AuctionFactory", function () {
   let factory: any;
   let mockERC721: any;
+  let mockERC1155: any;
   let owner: any;
   let seller: any;
 
@@ -15,12 +16,17 @@ describe("AuctionFactory", function () {
     const ERC721Factory = await ethers.getContractFactory("MockERC721");
     mockERC721 = await ERC721Factory.deploy();
 
+    const ERC1155Factory = await ethers.getContractFactory("MockERC1155");
+    mockERC1155 = await ERC1155Factory.deploy();
+
     await mockERC721.mint(seller.address, tokenId);
+    await mockERC1155.mint(seller.address, tokenId, 3);
 
     const FactoryFactory = await ethers.getContractFactory("AuctionFactory");
     factory = await FactoryFactory.deploy();
 
     await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
+    await mockERC1155.connect(seller).setApprovalForAll(await factory.getAddress(), true);
   });
 
   it("createEnglishAuction() deploys valid contract", async function () {
@@ -40,6 +46,133 @@ describe("AuctionFactory", function () {
     expect(auctions.length).to.equal(1);
     expect(auctions[0].seller).to.equal(seller.address);
     expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
+  });
+
+  it("createDutchAuction() deploys valid contract and escrows approved NFT", async function () {
+    const item = {
+      tokenType: 0, // ERC721
+      assetType: 0, // Digital
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await factory.connect(seller).createDutchAuction(item, ethers.parseEther("10"), ethers.parseEther("2"), 3600);
+
+    const auctions = await factory.getAllAuctions();
+    expect(auctions.length).to.equal(1);
+    expect(auctions[0].auctionType).to.equal(1n); // Dutch
+    expect(auctions[0].seller).to.equal(seller.address);
+    expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
+  });
+
+  it("createEnglishAuction() reverts without NFT approval", async function () {
+    const unapprovedTokenId = 2;
+    await mockERC721.mint(seller.address, unapprovedTokenId);
+
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: unapprovedTokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600)).to.be.reverted;
+  });
+
+  it("createEnglishAuction() reverts with zero token contract", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: ethers.ZeroAddress,
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600)).to.be.revertedWith(
+      "Token contract cannot be zero",
+    );
+  });
+
+  it("createEnglishAuction() reverts when ERC721 amount is not 1", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 2,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600)).to.be.revertedWith(
+      "ERC721 amount must be 1",
+    );
+  });
+
+  it("createEnglishAuction() reverts when ERC1155 amount is zero", async function () {
+    const item = {
+      tokenType: 1, // ERC1155
+      assetType: 0,
+      tokenContract: await mockERC1155.getAddress(),
+      tokenId: tokenId,
+      amount: 0,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600)).to.be.revertedWith(
+      "ERC1155 amount must be greater than zero",
+    );
+  });
+
+  it("createEnglishAuction() escrows approved ERC1155 items", async function () {
+    const item = {
+      tokenType: 1, // ERC1155
+      assetType: 0,
+      tokenContract: await mockERC1155.getAddress(),
+      tokenId: tokenId,
+      amount: 2,
+      metadataURI: "",
+    };
+
+    await factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600);
+
+    const auctions = await factory.getAllAuctions();
+    expect(await mockERC1155.balanceOf(auctions[0].contractAddress, tokenId)).to.equal(2n);
+    expect(await mockERC1155.balanceOf(seller.address, tokenId)).to.equal(1n);
+  });
+
+  it("createEnglishAuction() reverts when duration is below 10 minutes", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 599)).to.be.revertedWith(
+      "Duration must be at least 10 minutes",
+    );
+  });
+
+  it("createDutchAuction() reverts when duration is below 10 minutes", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(
+      factory.connect(seller).createDutchAuction(item, ethers.parseEther("10"), ethers.parseEther("2"), 599),
+    ).to.be.revertedWith("Duration must be at least 10 minutes");
   });
 
   it("createEnglishAuction() escrows a physical item represented by ERC721", async function () {

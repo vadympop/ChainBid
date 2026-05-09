@@ -94,7 +94,7 @@ abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, E
     }
 
     function isAwaitingConfirmation() external view returns (bool) {
-        return finalized && item.assetType == AssetType.Physical && !receivedConfirmed;
+        return finalized && item.assetType == AssetType.Physical && winner != address(0) && !receivedConfirmed;
     }
 
     function withdraw() external nonReentrant {
