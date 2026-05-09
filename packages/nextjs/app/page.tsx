@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { NextPage } from "next";
 import { useAccount } from "wagmi";
 import { AuctionCard } from "~~/components/chainbid/AuctionCard";
+import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
 import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import type { AuctionRecord } from "~~/types/chainbid";
 
@@ -51,6 +52,7 @@ const Home: NextPage = () => {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
   const [assetFilter, setAssetFilter] = useState<AssetFilter>("All");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const now = useAuctionNow();
   const { data: factoryInfo } = useDeployedContractInfo({ contractName: "AuctionFactory" });
   const { data: auctions, isLoading } = useScaffoldReadContract({
     contractName: "AuctionFactory",
@@ -148,6 +150,7 @@ const Home: NextPage = () => {
             <AuctionCard
               key={record.contractAddress}
               assetFilter={assetFilter}
+              now={now}
               record={record}
               statusFilter={statusFilter}
               typeFilter={typeFilter}

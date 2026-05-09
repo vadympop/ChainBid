@@ -9,6 +9,7 @@ import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chain
 import type { AuctionRecord, ChainBidMetadata, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
 import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
 import {
+  AUCTION_REFRESH_INTERVAL_MS,
   formatEth,
   getAuctionStatus,
   getDutchPrice,
@@ -23,6 +24,7 @@ type AuctionCardProps = {
   typeFilter: "All" | "English" | "Dutch";
   assetFilter: "All" | "Digital" | "Physical";
   statusFilter: "All" | "Active" | "Ended" | "Finalized" | "Awaiting confirmation";
+  now: bigint;
 };
 
 const matchesStatusFilter = (status: AuctionStatus, filter: AuctionCardProps["statusFilter"]) => {
@@ -33,7 +35,7 @@ const matchesStatusFilter = (status: AuctionStatus, filter: AuctionCardProps["st
   return status === "awaiting-confirmation";
 };
 
-export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter }: AuctionCardProps) => {
+export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now }: AuctionCardProps) => {
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const isEnglish = Number(record.auctionType) === AuctionType.English;
   const isDutch = Number(record.auctionType) === AuctionType.Dutch;
@@ -42,13 +44,34 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter }: A
     address: record.contractAddress,
     abi: englishAuctionAbi,
     functionName: "getAuctionInfo",
-    query: { enabled: isEnglish },
+    query: {
+      enabled: isEnglish,
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
   });
   const { data: dutchInfo, isLoading: isDutchLoading } = useReadContract({
     address: record.contractAddress,
     abi: dutchAuctionAbi,
     functionName: "getAuctionInfo",
-    query: { enabled: isDutch },
+    query: {
+      enabled: isDutch,
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
+  });
+  const { data: dutchCurrentPrice } = useReadContract({
+    address: record.contractAddress,
+    abi: dutchAuctionAbi,
+    functionName: "getCurrentPrice",
+    query: {
+      enabled: Boolean(isDutch && !(dutchInfo as DutchAuctionInfo | undefined)?.finalized),
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
   });
 
   const info = (isEnglish ? englishInfo : dutchInfo) as EnglishAuctionInfo | DutchAuctionInfo | undefined;
@@ -95,8 +118,19 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter }: A
     );
   }
 
-  const status = getAuctionStatus(info.endTime, info.finalized, item.assetType, info.winner, info.receivedConfirmed);
-  const price = isEnglish ? getEnglishPrice(info as EnglishAuctionInfo) : getDutchPrice(info as DutchAuctionInfo);
+  const status = getAuctionStatus(
+    info.endTime,
+    info.finalized,
+    item.assetType,
+    info.winner,
+    info.receivedConfirmed,
+    now,
+  );
+  const price = isEnglish
+    ? getEnglishPrice(info as EnglishAuctionInfo)
+    : (info as DutchAuctionInfo).finalized
+      ? getDutchPrice(info as DutchAuctionInfo)
+      : (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo));
   const assetLabel = item.assetType === AssetType.Digital ? "Digital" : "Physical";
 
   if (assetFilter !== "All" && assetFilter !== assetLabel) return null;
@@ -137,7 +171,7 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter }: A
           </div>
           <div>
             <p className="m-0 text-xs text-slate-500">Time left</p>
-            <p className="m-0 font-semibold text-white">{getTimeLeft(info.endTime)}</p>
+            <p className="m-0 font-semibold text-white">{getTimeLeft(info.endTime, now)}</p>
           </div>
         </div>
       </div>

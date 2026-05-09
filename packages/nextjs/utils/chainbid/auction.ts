@@ -4,6 +4,8 @@ import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chain
 import type { AuctionItem, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
 
 export const MIN_AUCTION_DURATION_SECONDS = 10 * 60;
+export const AUCTION_CLOCK_INTERVAL_MS = 1_000;
+export const AUCTION_REFRESH_INTERVAL_MS = 3_000;
 
 export const TOKEN_TYPE_LABELS: Record<TokenType, string> = {
   [TokenType.ERC721]: "ERC-721",
@@ -46,24 +48,27 @@ export const parseTokenIdInput = (value: string) => {
   return BigInt(trimmed);
 };
 
+export const getUnixTime = () => BigInt(Math.floor(Date.now() / 1000));
+
 export const getAuctionStatus = (
   endTime: bigint,
   finalized: boolean,
   assetType: AssetType,
   winner: Address,
   receivedConfirmed: boolean,
+  now: bigint = getUnixTime(),
 ): AuctionStatus => {
   if (finalized && assetType === AssetType.Physical && !isZeroAddress(winner) && !receivedConfirmed) {
     return "awaiting-confirmation";
   }
   if (finalized) return "finalized";
-  return BigInt(Math.floor(Date.now() / 1000)) >= endTime ? "ended" : "active";
+  return now >= endTime ? "ended" : "active";
 };
 
-export const getTimeLeft = (endTime?: bigint) => {
+export const getTimeLeft = (endTime?: bigint, now: bigint = getUnixTime()) => {
   if (!endTime) return "Unknown";
 
-  const remaining = Number(endTime - BigInt(Math.floor(Date.now() / 1000)));
+  const remaining = Number(endTime - now);
   if (remaining <= 0) return "Ended";
 
   const days = Math.floor(remaining / 86400);

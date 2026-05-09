@@ -9,11 +9,13 @@ import { useAccount, usePublicClient, useReadContract, useWriteContract } from "
 import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { PriceInput } from "~~/components/chainbid/PriceInput";
+import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AssetType, AuctionType, TokenType } from "~~/types/chainbid";
 import type { AuctionRecord, ChainBidMetadata, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
 import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
 import {
+  AUCTION_REFRESH_INTERVAL_MS,
   compactAddress,
   formatEth,
   getAuctionStatus,
@@ -39,6 +41,7 @@ const AuctionDetailPage: NextPage = () => {
   const { address: connectedAddress } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync, isPending } = useWriteContract();
+  const now = useAuctionNow();
   const [bidAmount, setBidAmount] = useState("");
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
@@ -60,13 +63,34 @@ const AuctionDetailPage: NextPage = () => {
     address: auctionAddress,
     abi: englishAuctionAbi,
     functionName: "getAuctionInfo",
-    query: { enabled: Boolean(auctionAddress && isEnglish) },
+    query: {
+      enabled: Boolean(auctionAddress && isEnglish),
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
   });
   const { data: dutchInfo, refetch: refetchDutch } = useReadContract({
     address: auctionAddress,
     abi: dutchAuctionAbi,
     functionName: "getAuctionInfo",
-    query: { enabled: Boolean(auctionAddress && isDutch) },
+    query: {
+      enabled: Boolean(auctionAddress && isDutch),
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
+  });
+  const { data: dutchCurrentPrice, refetch: refetchDutchCurrentPrice } = useReadContract({
+    address: auctionAddress,
+    abi: dutchAuctionAbi,
+    functionName: "getCurrentPrice",
+    query: {
+      enabled: Boolean(auctionAddress && isDutch && !(dutchInfo as DutchAuctionInfo | undefined)?.finalized),
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
   });
 
   const info = (isEnglish ? englishInfo : dutchInfo) as EnglishAuctionInfo | DutchAuctionInfo | undefined;
@@ -116,7 +140,10 @@ const AuctionDetailPage: NextPage = () => {
 
   const refetchInfo = async () => {
     if (isEnglish) await refetchEnglish();
-    if (isDutch) await refetchDutch();
+    if (isDutch) {
+      await refetchDutch();
+      await refetchDutchCurrentPrice();
+    }
   };
 
   const runAuctionTx = async (
@@ -161,12 +188,23 @@ const AuctionDetailPage: NextPage = () => {
     );
   }
 
-  const status = getAuctionStatus(info.endTime, info.finalized, item.assetType, info.winner, info.receivedConfirmed);
+  const status = getAuctionStatus(
+    info.endTime,
+    info.finalized,
+    item.assetType,
+    info.winner,
+    info.receivedConfirmed,
+    now,
+  );
   const isSeller = connectedAddress?.toLowerCase() === info.seller.toLowerCase();
   const isWinner = connectedAddress?.toLowerCase() === info.winner.toLowerCase();
   const isActive = status === "active";
   const isEnded = status === "ended";
-  const price = isEnglish ? getEnglishPrice(info as EnglishAuctionInfo) : getDutchPrice(info as DutchAuctionInfo);
+  const price = isEnglish
+    ? getEnglishPrice(info as EnglishAuctionInfo)
+    : (info as DutchAuctionInfo).finalized
+      ? getDutchPrice(info as DutchAuctionInfo)
+      : (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo));
   const canFinalize = isEnded && !info.finalized;
   const canConfirm = item.assetType === AssetType.Physical && info.finalized && isWinner && !info.receivedConfirmed;
   const hasRefund = (pendingReturns || 0n) > 0n;
@@ -197,7 +235,7 @@ const AuctionDetailPage: NextPage = () => {
         <div className="grid gap-3 sm:grid-cols-3">
           <DetailRow label={isEnglish ? "Current bid" : "Current price"} value={formatEth(price)} />
           <DetailRow label="Reserve" value={formatEth(info.reservePrice)} />
-          <DetailRow label="Time left" value={getTimeLeft(info.endTime)} />
+          <DetailRow label="Time left" value={getTimeLeft(info.endTime, now)} />
         </div>
 
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
