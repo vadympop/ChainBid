@@ -65,13 +65,25 @@ const failedFetchFallback = (tokenUri: string, error: unknown, fallback?: FetchN
 export const ipfsToHttp = (uri: string): string => {
   const trimmedUri = uri.trim();
 
-  if (!/^ipfs:\/\//i.test(trimmedUri)) {
-    return trimmedUri;
+  if (/^ipfs:\/\//i.test(trimmedUri)) {
+    const path = trimmedUri.replace(/^ipfs:\/\/(?:ipfs\/)?/i, "");
+
+    return `${IPFS_GATEWAY_BASE_URL}/${path}`;
   }
 
-  const path = trimmedUri.replace(/^ipfs:\/\/(?:ipfs\/)?/i, "");
+  let url: URL;
 
-  return `${IPFS_GATEWAY_BASE_URL}/${path}`;
+  try {
+    url = new URL(trimmedUri);
+  } catch {
+    throw new Error("Only absolute ipfs:// and https:// URIs are supported.");
+  }
+
+  if (url.protocol !== "https:") {
+    throw new Error("Only ipfs:// and https:// URIs are supported.");
+  }
+
+  return url.toString();
 };
 
 export const fetchNftMetadata = async (tokenUri: string, fallback?: FetchNftMetadataFallback): Promise<NftMetadata> => {
