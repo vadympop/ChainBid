@@ -1,4 +1,4 @@
-const IPFS_GATEWAY_BASE_URL = "https://gateway.pinata.cloud/ipfs";
+export const IPFS_GATEWAY_BASE_URL = "https://gateway.pinata.cloud/ipfs";
 
 export const NFT_METADATA_PLACEHOLDER_IMAGE = "/thumbnail.jpg";
 

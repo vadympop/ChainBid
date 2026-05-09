@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { IPFS_GATEWAY_BASE_URL } from "~~/utils/scaffold-eth/ipfs";
 
 const PINATA_UPLOAD_URL = "https://uploads.pinata.cloud/v3/files";
-const PINATA_GATEWAY_BASE_URL = "https://gateway.pinata.cloud/ipfs";
 const MAX_IMAGE_COUNT = 5;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_SIZE_BYTES = 25 * 1024 * 1024;
@@ -199,7 +199,7 @@ export async function POST(request: Request) {
       imageUri: imageUris[0],
       imageUris,
       metadataUri,
-      gatewayUrl: `${PINATA_GATEWAY_BASE_URL}/${metadataCid}`,
+      gatewayUrl: `${IPFS_GATEWAY_BASE_URL}/${metadataCid}`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to upload metadata to Pinata.";
