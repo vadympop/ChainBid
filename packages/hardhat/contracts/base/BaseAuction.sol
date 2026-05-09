@@ -50,16 +50,6 @@ abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, E
         seller = _seller;
         endTime = block.timestamp + _duration;
         reservePrice = _reservePrice;
-
-        _escrowItem();
-    }
-
-    function _escrowItem() internal {
-        if (item.itemType == ItemType.ERC721) {
-            IERC721(item.tokenContract).transferFrom(seller, address(this), item.tokenId);
-        } else if (item.itemType == ItemType.ERC1155) {
-            IERC1155(item.tokenContract).safeTransferFrom(seller, address(this), item.tokenId, item.amount, "");
-        }
     }
 
     function _transferItem(address to) internal {

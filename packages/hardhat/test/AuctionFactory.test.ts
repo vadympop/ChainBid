@@ -20,17 +20,7 @@ describe("AuctionFactory", function () {
     const FactoryFactory = await ethers.getContractFactory("AuctionFactory");
     factory = await FactoryFactory.deploy();
 
-    // The factory creates an auction. For the factory to pull the NFT,
-    // the seller must approve the factory. But wait, the auction contract is the one pulling the NFT
-    // in its constructor. So the seller must approve the expected auction address or use setApprovalForAll for the auction?
-    // Wait, since the factory deploys it, we can predict the auction address from the factory's nonce!
-    const txCount = await ethers.provider.getTransactionCount(await factory.getAddress());
-    const expectedAddress = ethers.getCreateAddress({
-      from: await factory.getAddress(),
-      nonce: txCount,
-    });
-
-    await mockERC721.connect(seller).approve(expectedAddress, tokenId);
+    await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
   });
 
   it("createEnglishAuction() deploys valid contract", async function () {
@@ -48,6 +38,7 @@ describe("AuctionFactory", function () {
     const auctions = await factory.getAllAuctions();
     expect(auctions.length).to.equal(1);
     expect(auctions[0].seller).to.equal(seller.address);
+    expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
   });
 
   it("getAllAuctions() returns correct record", async function () {

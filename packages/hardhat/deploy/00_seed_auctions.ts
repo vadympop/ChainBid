@@ -30,23 +30,10 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
   const deployerSigner = await hre.ethers.provider.getSigner(deployer);
 
   const factoryAddress = factoryDeployment.address;
-  const factoryNonce = await hre.ethers.provider.getTransactionCount(factoryAddress);
 
-  // Predict English Auction clone address (nonce)
-  const englishCloneAddress = hre.ethers.getCreateAddress({
-    from: factoryAddress,
-    nonce: factoryNonce,
-  });
-
-  // Predict Dutch Auction clone address (nonce + 1)
-  const dutchCloneAddress = hre.ethers.getCreateAddress({
-    from: factoryAddress,
-    nonce: factoryNonce + 1,
-  });
-
-  // Approve the predicted clone addresses
-  await mockContract.connect(deployerSigner).approve(englishCloneAddress, tokenId1, { gasLimit: 200_000 });
-  await mockContract.connect(deployerSigner).approve(dutchCloneAddress, tokenId2, { gasLimit: 200_000 });
+  // Approve the factory to escrow these NFTs into newly created auction clones.
+  await mockContract.connect(deployerSigner).approve(factoryAddress, tokenId1, { gasLimit: 200_000 });
+  await mockContract.connect(deployerSigner).approve(factoryAddress, tokenId2, { gasLimit: 200_000 });
 
   const duration = 3600; // 1 hour
 

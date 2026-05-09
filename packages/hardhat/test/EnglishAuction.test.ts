@@ -31,7 +31,7 @@ describe("EnglishAuction", function () {
       nonce: txCount,
     });
 
-    await mockERC721.connect(seller).approve(expectedAddress, tokenId);
+    await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
 
     const item = {
       itemType: 0, // ERC721

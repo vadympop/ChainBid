@@ -32,7 +32,7 @@ describe("DutchAuction", function () {
       nonce: txCount,
     });
 
-    await mockERC721.connect(seller).approve(expectedAddress, tokenId);
+    await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
 
     const item = {
       itemType: 0, // ERC721
@@ -102,13 +102,7 @@ describe("DutchAuction", function () {
     const invalidTokenId = 2;
     await mockERC721.mint(seller.address, invalidTokenId);
 
-    const txCount = await ethers.provider.getTransactionCount(await factory.getAddress());
-    const expectedAddress = ethers.getCreateAddress({
-      from: await factory.getAddress(),
-      nonce: txCount,
-    });
-
-    await mockERC721.connect(seller).approve(expectedAddress, invalidTokenId);
+    await mockERC721.connect(seller).approve(await factory.getAddress(), invalidTokenId);
 
     const item = {
       itemType: 0,
@@ -130,13 +124,7 @@ describe("DutchAuction", function () {
     const invalidTokenId = 3;
     await mockERC721.mint(seller.address, invalidTokenId);
 
-    const txCount = await ethers.provider.getTransactionCount(await factory.getAddress());
-    const expectedAddress = ethers.getCreateAddress({
-      from: await factory.getAddress(),
-      nonce: txCount,
-    });
-
-    await mockERC721.connect(seller).approve(expectedAddress, invalidTokenId);
+    await mockERC721.connect(seller).approve(await factory.getAddress(), invalidTokenId);
 
     const item = {
       itemType: 0,

@@ -18,14 +18,6 @@ describe("BaseAuction", function () {
 
     await mockERC721.mint(owner.address, tokenId);
 
-    const txCount = await owner.getNonce();
-    const expectedAddress = ethers.getCreateAddress({
-      from: owner.address,
-      nonce: txCount + 1,
-    });
-
-    await mockERC721.approve(expectedAddress, tokenId);
-
     const AuctionFactory = await ethers.getContractFactory("MockBaseAuction");
     const item = {
       itemType: 0, // ERC721
@@ -37,10 +29,11 @@ describe("BaseAuction", function () {
 
     mockAuction = await AuctionFactory.deploy();
     await mockAuction.initialize(item, owner.address, 3600, ethers.parseEther("1"));
+    await mockERC721.transferFrom(owner.address, await mockAuction.getAddress(), tokenId);
   });
 
   describe("Escrow and Transfer", function () {
-    it("should escrow NFT into contract on deploy", async function () {
+    it("should hold escrowed NFT", async function () {
       const auctionAddress = await mockAuction.getAddress();
       expect(await mockERC721.ownerOf(tokenId)).to.equal(auctionAddress);
     });

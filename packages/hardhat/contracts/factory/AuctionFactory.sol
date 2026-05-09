@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "../items/AuctionItem.sol";
 import "../auctions/EnglishAuction.sol";
 import "../auctions/DutchAuction.sol";
@@ -34,6 +36,7 @@ contract AuctionFactory {
     ) external returns (address) {
         address clone = Clones.clone(englishImpl);
         EnglishAuction(clone).initialize(item, payable(msg.sender), duration, reservePrice);
+        _escrowItem(item, msg.sender, clone);
 
         _register(clone, AuctionType.English, msg.sender);
         return clone;
@@ -47,9 +50,18 @@ contract AuctionFactory {
     ) external returns (address) {
         address clone = Clones.clone(dutchImpl);
         DutchAuction(clone).initialize(item, payable(msg.sender), startPrice, reservePrice, duration);
+        _escrowItem(item, msg.sender, clone);
 
         _register(clone, AuctionType.Dutch, msg.sender);
         return clone;
+    }
+
+    function _escrowItem(AuctionItem memory item, address seller, address auctionAddress) internal {
+        if (item.itemType == ItemType.ERC721) {
+            IERC721(item.tokenContract).transferFrom(seller, auctionAddress, item.tokenId);
+        } else if (item.itemType == ItemType.ERC1155) {
+            IERC1155(item.tokenContract).safeTransferFrom(seller, auctionAddress, item.tokenId, item.amount, "");
+        }
     }
 
     function _register(address auctionAddress, AuctionType auctionType, address seller) internal {
