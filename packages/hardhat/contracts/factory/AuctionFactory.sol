@@ -57,9 +57,9 @@ contract AuctionFactory {
     }
 
     function _escrowItem(AuctionItem memory item, address seller, address auctionAddress) internal {
-        if (item.itemType == ItemType.ERC721) {
+        if (item.tokenType == TokenType.ERC721) {
             IERC721(item.tokenContract).transferFrom(seller, auctionAddress, item.tokenId);
-        } else if (item.itemType == ItemType.ERC1155) {
+        } else if (item.tokenType == TokenType.ERC1155) {
             IERC1155(item.tokenContract).safeTransferFrom(seller, auctionAddress, item.tokenId, item.amount, "");
         }
     }

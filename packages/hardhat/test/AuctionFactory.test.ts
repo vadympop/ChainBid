@@ -25,7 +25,8 @@ describe("AuctionFactory", function () {
 
   it("createEnglishAuction() deploys valid contract", async function () {
     const item = {
-      itemType: 0, // ERC721
+      tokenType: 0, // ERC721
+      assetType: 0, // Digital
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
@@ -41,9 +42,31 @@ describe("AuctionFactory", function () {
     expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
   });
 
+  it("createEnglishAuction() escrows a physical item represented by ERC721", async function () {
+    const item = {
+      tokenType: 0, // ERC721
+      assetType: 1, // Physical
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600);
+
+    const auctions = await factory.getAllAuctions();
+    const auction = await ethers.getContractAt("EnglishAuction", auctions[0].contractAddress);
+    const auctionInfo = await auction.getAuctionInfo();
+
+    expect(auctionInfo.item.tokenType).to.equal(0n);
+    expect(auctionInfo.item.assetType).to.equal(1n);
+    expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
+  });
+
   it("getAllAuctions() returns correct record", async function () {
     const item = {
-      itemType: 0,
+      tokenType: 0,
+      assetType: 0,
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
@@ -58,7 +81,8 @@ describe("AuctionFactory", function () {
 
   it("getAuctionsBySeller() filters correctly", async function () {
     const item = {
-      itemType: 0,
+      tokenType: 0,
+      assetType: 0,
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
@@ -75,7 +99,8 @@ describe("AuctionFactory", function () {
 
   it("Pagination returns correct slice", async function () {
     const item = {
-      itemType: 0,
+      tokenType: 0,
+      assetType: 0,
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
@@ -92,7 +117,8 @@ describe("AuctionFactory", function () {
 
   it("AuctionCreated event emitted with correct args", async function () {
     const item = {
-      itemType: 0,
+      tokenType: 0,
+      assetType: 0,
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,

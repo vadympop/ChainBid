@@ -35,7 +35,8 @@ describe("DutchAuction", function () {
     await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
 
     const item = {
-      itemType: 0, // ERC721
+      tokenType: 0, // ERC721
+      assetType: 0, // Digital
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
@@ -105,7 +106,8 @@ describe("DutchAuction", function () {
     await mockERC721.connect(seller).approve(await factory.getAddress(), invalidTokenId);
 
     const item = {
-      itemType: 0,
+      tokenType: 0,
+      assetType: 0,
       tokenContract: await mockERC721.getAddress(),
       tokenId: invalidTokenId,
       amount: 1,
@@ -127,7 +129,8 @@ describe("DutchAuction", function () {
     await mockERC721.connect(seller).approve(await factory.getAddress(), invalidTokenId);
 
     const item = {
-      itemType: 0,
+      tokenType: 0,
+      assetType: 0,
       tokenContract: await mockERC721.getAddress(),
       tokenId: invalidTokenId,
       amount: 1,

@@ -34,7 +34,8 @@ describe("EnglishAuction", function () {
     await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
 
     const item = {
-      itemType: 0, // ERC721
+      tokenType: 0, // ERC721
+      assetType: 0, // Digital
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
