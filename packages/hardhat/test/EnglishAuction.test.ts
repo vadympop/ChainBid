@@ -5,6 +5,7 @@ import { time } from "@nomicfoundation/hardhat-network-helpers";
 describe("EnglishAuction", function () {
   let auction: any;
   let mockERC721: any;
+  let factory: any;
 
   let seller: any;
   let bidder1: any;
@@ -23,28 +24,32 @@ describe("EnglishAuction", function () {
     await mockERC721.mint(seller.address, tokenId);
 
     const FactoryFactory = await ethers.getContractFactory("AuctionFactory");
-    const factory = await FactoryFactory.deploy();
+    factory = await FactoryFactory.deploy();
 
+    auction = await createEnglishAuctionForToken(tokenId, 0);
+  });
+
+  async function createEnglishAuctionForToken(auctionTokenId: number, assetType: number) {
     const txCount = await ethers.provider.getTransactionCount(await factory.getAddress());
     const expectedAddress = ethers.getCreateAddress({
       from: await factory.getAddress(),
       nonce: txCount,
     });
 
-    await mockERC721.connect(seller).approve(await factory.getAddress(), tokenId);
+    await mockERC721.connect(seller).approve(await factory.getAddress(), auctionTokenId);
 
     const item = {
       tokenType: 0, // ERC721
-      assetType: 0, // Digital
+      assetType,
       tokenContract: await mockERC721.getAddress(),
-      tokenId: tokenId,
+      tokenId: auctionTokenId,
       amount: 1,
       metadataURI: "",
     };
 
     await factory.connect(seller).createEnglishAuction(item, reservePrice, duration);
-    auction = await ethers.getContractAt("EnglishAuction", expectedAddress);
-  });
+    return ethers.getContractAt("EnglishAuction", expectedAddress);
+  }
 
   it("Bid below highest reverts", async function () {
     await auction.connect(bidder1).bid({ value: ethers.parseEther("2") });
@@ -112,6 +117,59 @@ describe("EnglishAuction", function () {
 
     expect(finalBalance - initialBalance).to.equal(ethers.parseEther("2"));
     expect(await mockERC721.ownerOf(tokenId)).to.equal(bidder1.address);
+  });
+
+  it("finalize() with physical item holds ETH until winner confirms receipt", async function () {
+    const physicalTokenId = 2;
+    const price = ethers.parseEther("2");
+    await mockERC721.mint(seller.address, physicalTokenId);
+    const physicalAuction = await createEnglishAuctionForToken(physicalTokenId, 1);
+
+    await physicalAuction.connect(bidder1).bid({ value: price });
+    await time.increase(duration + 1);
+
+    const initialBalance = await ethers.provider.getBalance(seller.address);
+    await physicalAuction.finalize();
+    const afterFinalizeBalance = await ethers.provider.getBalance(seller.address);
+
+    expect(afterFinalizeBalance).to.equal(initialBalance);
+    expect(await ethers.provider.getBalance(await physicalAuction.getAddress())).to.equal(price);
+    expect(await mockERC721.ownerOf(physicalTokenId)).to.equal(bidder1.address);
+    expect(await physicalAuction.winner()).to.equal(bidder1.address);
+    expect(await physicalAuction.finalPrice()).to.equal(price);
+    expect(await physicalAuction.isAwaitingConfirmation()).to.equal(true);
+
+    await physicalAuction.connect(bidder1).confirmReceived();
+    const finalBalance = await ethers.provider.getBalance(seller.address);
+
+    expect(finalBalance - initialBalance).to.equal(price);
+    expect(await ethers.provider.getBalance(await physicalAuction.getAddress())).to.equal(0n);
+    expect(await physicalAuction.receivedConfirmed()).to.equal(true);
+    expect(await physicalAuction.isAwaitingConfirmation()).to.equal(false);
+  });
+
+  it("confirmReceived() rejects non-winner, digital auctions, and repeated confirmation", async function () {
+    await auction.connect(bidder1).bid({ value: ethers.parseEther("2") });
+    await time.increase(duration + 1);
+    await auction.finalize();
+
+    await expect(auction.connect(bidder1).confirmReceived()).to.be.revertedWith(
+      "Only physical items require confirmation",
+    );
+
+    const physicalTokenId = 3;
+    await mockERC721.mint(seller.address, physicalTokenId);
+    const physicalAuction = await createEnglishAuctionForToken(physicalTokenId, 1);
+    await physicalAuction.connect(bidder1).bid({ value: ethers.parseEther("2") });
+    await time.increase(duration + 1);
+    await physicalAuction.finalize();
+
+    await expect(physicalAuction.connect(bidder2).confirmReceived()).to.be.revertedWith(
+      "Only winner can confirm receipt",
+    );
+
+    await physicalAuction.connect(bidder1).confirmReceived();
+    await expect(physicalAuction.connect(bidder1).confirmReceived()).to.be.revertedWith("Receipt already confirmed");
   });
 
   it("Double finalize() reverts", async function () {

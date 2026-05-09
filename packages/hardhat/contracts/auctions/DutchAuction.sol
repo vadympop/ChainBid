@@ -52,12 +52,7 @@ contract DutchAuction is BaseAuction {
         // Finalize immediately
         finalized = true;
 
-        // Transfer ETH to seller
-        (bool sellerSuccess, ) = seller.call{ value: currentPrice }("");
-        require(sellerSuccess, "Transfer to seller failed");
-
-        // Transfer item to buyer
-        _transferItem(msg.sender);
+        _settleSale(msg.sender, currentPrice);
 
         emit BidPlaced(msg.sender, currentPrice);
         emit AuctionFinalized(msg.sender, currentPrice);
@@ -72,5 +67,38 @@ contract DutchAuction is BaseAuction {
         finalized = true;
         _transferItem(seller);
         emit AuctionCancelled();
+    }
+
+    struct AuctionInfo {
+        AuctionItem item;
+        address seller;
+        uint256 endTime;
+        bool finalized;
+        uint256 reservePrice;
+        uint256 startPrice;
+        uint256 duration;
+        uint256 startTime;
+        uint256 currentPrice;
+        address winner;
+        uint256 finalPrice;
+        bool receivedConfirmed;
+    }
+
+    function getAuctionInfo() external view returns (AuctionInfo memory) {
+        return
+            AuctionInfo({
+                item: item,
+                seller: seller,
+                endTime: endTime,
+                finalized: finalized,
+                reservePrice: reservePrice,
+                startPrice: startPrice,
+                duration: duration,
+                startTime: startTime,
+                currentPrice: getCurrentPrice(),
+                winner: winner,
+                finalPrice: finalPrice,
+                receivedConfirmed: receivedConfirmed
+            });
     }
 }

@@ -15,6 +15,9 @@ abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, E
     uint256 public endTime;
     bool public finalized;
     uint256 public reservePrice;
+    address public winner;
+    uint256 public finalPrice;
+    bool public receivedConfirmed;
 
     mapping(address => uint256) public pendingReturns;
 
@@ -22,6 +25,7 @@ abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, E
     event AuctionFinalized(address indexed winner, uint256 amount);
     event AuctionCancelled();
     event ItemReturned(address indexed to);
+    event ReceivedConfirmed(address indexed winner);
 
     modifier onlyActive() {
         require(block.timestamp < endTime, "Auction has ended");
@@ -59,6 +63,38 @@ abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, E
             IERC1155(item.tokenContract).safeTransferFrom(address(this), to, item.tokenId, item.amount, "");
         }
         emit ItemReturned(to);
+    }
+
+    function _settleSale(address _winner, uint256 _finalPrice) internal {
+        winner = _winner;
+        finalPrice = _finalPrice;
+
+        _transferItem(_winner);
+
+        if (item.assetType == AssetType.Digital) {
+            _releasePayment();
+        }
+    }
+
+    function _releasePayment() internal {
+        (bool success, ) = seller.call{ value: finalPrice }("");
+        require(success, "Transfer to seller failed");
+    }
+
+    function confirmReceived() external nonReentrant {
+        require(item.assetType == AssetType.Physical, "Only physical items require confirmation");
+        require(finalized && winner != address(0), "Auction not sold");
+        require(msg.sender == winner, "Only winner can confirm receipt");
+        require(!receivedConfirmed, "Receipt already confirmed");
+
+        receivedConfirmed = true;
+        _releasePayment();
+
+        emit ReceivedConfirmed(msg.sender);
+    }
+
+    function isAwaitingConfirmation() external view returns (bool) {
+        return finalized && item.assetType == AssetType.Physical && !receivedConfirmed;
     }
 
     function withdraw() external nonReentrant {
