@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 const PINATA_UPLOAD_URL = "https://uploads.pinata.cloud/v3/files";
 const PINATA_GATEWAY_BASE_URL = "https://gateway.pinata.cloud/ipfs";
 const MAX_IMAGE_COUNT = 5;
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_SIZE_BYTES = 25 * 1024 * 1024;
 const ASSET_TYPES = ["Digital", "Physical"] as const;
 
 type AssetType = (typeof ASSET_TYPES)[number];
@@ -31,6 +33,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const isAssetType = (value: string): value is AssetType => ASSET_TYPES.includes(value as AssetType);
+
+const formatMegabytes = (bytes: number) => `${bytes / 1024 / 1024} MB`;
 
 const getTextField = (formData: FormData, fieldName: string) => {
   const value = formData.get(fieldName);
@@ -72,9 +76,19 @@ const validateUploadForm = (formData: FormData): ValidationResult => {
     errors.push(`Upload no more than ${MAX_IMAGE_COUNT} images.`);
   }
 
+  const totalImageSize = images.reduce((total, image) => total + image.size, 0);
+
+  if (totalImageSize > MAX_TOTAL_IMAGE_SIZE_BYTES) {
+    errors.push(`Total image upload size must be ${formatMegabytes(MAX_TOTAL_IMAGE_SIZE_BYTES)} or smaller.`);
+  }
+
   for (const [index, image] of images.entries()) {
     if (image.size === 0) {
       errors.push(`images[${index}] is empty.`);
+    }
+
+    if (image.size > MAX_IMAGE_SIZE_BYTES) {
+      errors.push(`images[${index}] must be ${formatMegabytes(MAX_IMAGE_SIZE_BYTES)} or smaller.`);
     }
 
     if (!image.type.startsWith("image/")) {
