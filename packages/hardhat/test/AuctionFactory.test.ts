@@ -128,6 +128,32 @@ describe("AuctionFactory", function () {
     );
   });
 
+  it("createEnglishAuction() reverts with unsupported token type", async function () {
+    const item = {
+      tokenType: 2,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600)).to.be.reverted;
+  });
+
+  it("createEnglishAuction() reverts with unsupported asset type", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 2,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600)).to.be.reverted;
+  });
+
   it("createEnglishAuction() escrows approved ERC1155 items", async function () {
     const item = {
       tokenType: 1, // ERC1155
