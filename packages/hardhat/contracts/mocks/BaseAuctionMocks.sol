@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "../base/BaseAuction.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
 contract MockBaseAuction is BaseAuction {
     constructor() {}
@@ -37,6 +38,14 @@ contract MockERC721 is ERC721 {
 
     function mint(address to, uint256 tokenId) external {
         _mint(to, tokenId);
+    }
+}
+
+contract MockERC1155 is ERC1155 {
+    constructor() ERC1155("") {}
+
+    function mint(address to, uint256 tokenId, uint256 amount) external {
+        _mint(to, tokenId, amount, "");
     }
 }
 

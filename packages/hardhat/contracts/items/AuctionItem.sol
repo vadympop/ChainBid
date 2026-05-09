@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-enum ItemType {
+enum TokenType {
     ERC721,
-    ERC1155,
+    ERC1155
+}
+
+enum AssetType {
+    Digital,
     Physical
 }
+
 enum AuctionType {
     English,
     Dutch,
@@ -19,7 +24,8 @@ enum AuctionState {
 }
 
 struct AuctionItem {
-    ItemType itemType;
+    TokenType tokenType;
+    AssetType assetType;
     address tokenContract;
     uint256 tokenId;
     uint256 amount;

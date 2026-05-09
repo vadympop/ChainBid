@@ -39,7 +39,8 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
 
   // 4. Create English Auction
   const englishItem = {
-    itemType: 0, // ERC721
+    tokenType: 0, // ERC721
+    assetType: 0, // Digital
     tokenContract: mockToken.address,
     tokenId: tokenId1,
     amount: 1,
@@ -56,7 +57,8 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
 
   // 5. Create Dutch Auction
   const dutchItem = {
-    itemType: 0, // ERC721
+    tokenType: 0, // ERC721
+    assetType: 0, // Digital
     tokenContract: mockToken.address,
     tokenId: tokenId2,
     amount: 1,

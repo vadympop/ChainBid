@@ -20,7 +20,8 @@ describe("BaseAuction", function () {
 
     const AuctionFactory = await ethers.getContractFactory("MockBaseAuction");
     const item = {
-      itemType: 0, // ERC721
+      tokenType: 0, // ERC721
+      assetType: 0, // Digital
       tokenContract: await mockERC721.getAddress(),
       tokenId: tokenId,
       amount: 1,
