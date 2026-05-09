@@ -34,7 +34,7 @@ contract AuctionFactory {
     ) external returns (address) {
         address clone = Clones.clone(englishImpl);
         EnglishAuction(clone).initialize(item, payable(msg.sender), duration, reservePrice);
-        
+
         _register(clone, AuctionType.English, msg.sender);
         return clone;
     }
@@ -47,19 +47,21 @@ contract AuctionFactory {
     ) external returns (address) {
         address clone = Clones.clone(dutchImpl);
         DutchAuction(clone).initialize(item, payable(msg.sender), startPrice, reservePrice, duration);
-        
+
         _register(clone, AuctionType.Dutch, msg.sender);
         return clone;
     }
 
     function _register(address auctionAddress, AuctionType auctionType, address seller) internal {
-        allAuctions.push(AuctionRecord({
-            contractAddress: auctionAddress,
-            auctionType: auctionType,
-            seller: seller,
-            createdAt: block.timestamp
-        }));
-        
+        allAuctions.push(
+            AuctionRecord({
+                contractAddress: auctionAddress,
+                auctionType: auctionType,
+                seller: seller,
+                createdAt: block.timestamp
+            })
+        );
+
         sellerAuctions[seller].push(auctionAddress);
 
         emit AuctionCreated(auctionAddress, auctionType, seller);

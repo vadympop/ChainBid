@@ -46,7 +46,7 @@ contract EnglishAuction is BaseAuction {
 
         if (highestBidder != address(0)) {
             // Transfer ETH to seller
-            (bool success, ) = seller.call{value: highestBid}("");
+            (bool success, ) = seller.call{ value: highestBid }("");
             require(success, "Transfer to seller failed");
 
             // Transfer item to highest bidder
@@ -70,14 +70,15 @@ contract EnglishAuction is BaseAuction {
     }
 
     function getAuctionInfo() external view returns (AuctionInfo memory) {
-        return AuctionInfo({
-            item: item,
-            seller: seller,
-            endTime: endTime,
-            finalized: finalized,
-            reservePrice: reservePrice,
-            highestBidder: highestBidder,
-            highestBid: highestBid
-        });
+        return
+            AuctionInfo({
+                item: item,
+                seller: seller,
+                endTime: endTime,
+                finalized: finalized,
+                reservePrice: reservePrice,
+                highestBidder: highestBidder,
+                highestBid: highestBid
+            });
     }
 }

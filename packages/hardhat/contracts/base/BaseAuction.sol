@@ -76,8 +76,8 @@ abstract contract BaseAuction is Initializable, ReentrancyGuard, ERC721Holder, E
         require(amount > 0, "No pending returns");
 
         pendingReturns[msg.sender] = 0;
-        
-        (bool success, ) = payable(msg.sender).call{value: amount}("");
+
+        (bool success, ) = payable(msg.sender).call{ value: amount }("");
         require(success, "Withdrawal failed");
     }
 

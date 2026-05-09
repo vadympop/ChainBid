@@ -34,7 +34,7 @@ contract MockBaseAuction is BaseAuction {
 
 contract MockERC721 is ERC721 {
     constructor() ERC721("Mock", "MCK") {}
-    
+
     function mint(address to, uint256 tokenId) external {
         _mint(to, tokenId);
     }

@@ -42,7 +42,7 @@ contract DutchAuction is BaseAuction {
 
         // Refund excess
         if (msg.value > currentPrice) {
-            (bool refundSuccess, ) = msg.sender.call{value: msg.value - currentPrice}("");
+            (bool refundSuccess, ) = msg.sender.call{ value: msg.value - currentPrice }("");
             require(refundSuccess, "Refund failed");
         }
 
@@ -50,7 +50,7 @@ contract DutchAuction is BaseAuction {
         finalized = true;
 
         // Transfer ETH to seller
-        (bool sellerSuccess, ) = seller.call{value: currentPrice}("");
+        (bool sellerSuccess, ) = seller.call{ value: currentPrice }("");
         require(sellerSuccess, "Transfer to seller failed");
 
         // Transfer item to buyer
