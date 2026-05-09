@@ -95,7 +95,7 @@ contract DutchAuction is BaseAuction {
                 startPrice: startPrice,
                 duration: duration,
                 startTime: startTime,
-                currentPrice: getCurrentPrice(),
+                currentPrice: finalized ? finalPrice : getCurrentPrice(),
                 winner: winner,
                 finalPrice: finalPrice,
                 receivedConfirmed: receivedConfirmed
