@@ -48,6 +48,12 @@ export const parseTokenIdInput = (value: string) => {
   return BigInt(trimmed);
 };
 
+export const parseTokenAmountInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return undefined;
+  return BigInt(trimmed);
+};
+
 export const getUnixTime = () => BigInt(Math.floor(Date.now() / 1000));
 
 export const getAuctionStatus = (
@@ -104,13 +110,15 @@ export const validateTokenAddress = (value: string): value is Address => isAddre
 export const buildAuctionItem = (params: {
   assetType: AssetType;
   metadataURI: string;
+  tokenType: TokenType;
   tokenContract: Address;
   tokenId: bigint;
+  amount: bigint;
 }): AuctionItem => ({
-  tokenType: TokenType.ERC721,
+  tokenType: params.tokenType,
   assetType: params.assetType,
   tokenContract: params.tokenContract,
   tokenId: params.tokenId,
-  amount: 1n,
+  amount: params.tokenType === TokenType.ERC721 ? 1n : params.amount,
   metadataURI: params.metadataURI,
 });

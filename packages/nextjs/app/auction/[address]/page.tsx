@@ -17,6 +17,7 @@ import type { AuctionRecord, ChainBidMetadata, DutchAuctionInfo, EnglishAuctionI
 import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
 import {
   AUCTION_REFRESH_INTERVAL_MS,
+  TOKEN_TYPE_LABELS,
   compactAddress,
   formatEth,
   getAuctionStatus,
@@ -59,6 +60,7 @@ const AuctionDetailPage: NextPage = () => {
 
   const isEnglish = !record || Number(record.auctionType) === AuctionType.English;
   const isDutch = Number(record?.auctionType) === AuctionType.Dutch;
+  const auctionAbi = isDutch ? dutchAuctionAbi : englishAuctionAbi;
 
   const { data: englishInfo, refetch: refetchEnglish } = useReadContract({
     address: auctionAddress,
@@ -99,7 +101,7 @@ const AuctionDetailPage: NextPage = () => {
 
   const { data: pendingReturns } = useReadContract({
     address: auctionAddress,
-    abi: englishAuctionAbi,
+    abi: auctionAbi,
     functionName: "pendingReturns",
     args: [connectedAddress || "0x0000000000000000000000000000000000000000"],
     query: { enabled: Boolean(auctionAddress && connectedAddress) },
@@ -218,6 +220,8 @@ const AuctionDetailPage: NextPage = () => {
         <div className="grid grid-cols-2 gap-3">
           <DetailRow label="Seller" value={compactAddress(info.seller)} />
           <DetailRow label="Winner" value={isZeroAddress(info.winner) ? "None" : compactAddress(info.winner)} />
+          <DetailRow label="Token standard" value={TOKEN_TYPE_LABELS[item.tokenType]} />
+          <DetailRow label="Amount" value={item.amount.toString()} />
         </div>
       </aside>
 
@@ -297,7 +301,7 @@ const AuctionDetailPage: NextPage = () => {
               onClick={() =>
                 runAuctionTx("Withdrawing refundable bid balance.", {
                   address: auctionAddress,
-                  abi: englishAuctionAbi,
+                  abi: auctionAbi,
                   functionName: "withdraw",
                 })
               }

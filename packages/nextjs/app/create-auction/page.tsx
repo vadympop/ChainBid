@@ -8,12 +8,13 @@ import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { PriceInput } from "~~/components/chainbid/PriceInput";
 import { useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
-import { AssetType, CreateAuctionForm } from "~~/types/chainbid";
+import { AssetType, CreateAuctionForm, TokenType } from "~~/types/chainbid";
 import type { ChainBidMetadata } from "~~/types/chainbid";
-import { erc721Abi } from "~~/utils/chainbid/abis";
+import { erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
 import {
   MIN_AUCTION_DURATION_SECONDS,
   buildAuctionItem,
+  parseTokenAmountInput,
   parseTokenIdInput,
   secondsFromHours,
   validateTokenAddress,
@@ -25,8 +26,10 @@ import { getParsedError, notification } from "~~/utils/scaffold-eth";
 const initialForm: CreateAuctionForm = {
   auctionType: "English",
   assetType: "Digital",
+  tokenType: "ERC721",
   tokenContract: "",
   tokenId: "",
+  amount: "1",
   reservePrice: "",
   startPrice: "",
   durationHours: "1",
@@ -37,6 +40,9 @@ const validateForm = (form: CreateAuctionForm, address?: string, factoryAddress?
   if (!factoryAddress) return "AuctionFactory is not deployed.";
   if (!validateTokenAddress(form.tokenContract)) return "Enter a valid token contract address.";
   if (parseTokenIdInput(form.tokenId) === undefined) return "Enter a valid token ID.";
+  if (form.tokenType === "ERC1155" && parseTokenAmountInput(form.amount) === undefined) {
+    return "ERC-1155 amount must be a positive whole number.";
+  }
   if (!form.reservePrice || Number(form.reservePrice) <= 0) return "Reserve price must be greater than zero.";
   if (form.auctionType === "Dutch") {
     if (!form.startPrice || Number(form.startPrice) <= 0) return "Dutch start price must be greater than zero.";
@@ -64,15 +70,42 @@ const CreateAuctionPage: NextPage = () => {
 
   const tokenAddress = validateTokenAddress(form.tokenContract) ? (form.tokenContract as Address) : undefined;
   const parsedTokenId = parseTokenIdInput(form.tokenId);
+  const parsedAmount = form.tokenType === "ERC1155" ? parseTokenAmountInput(form.amount) : 1n;
   const tokenId = parsedTokenId || 0n;
 
-  const { data: tokenUri, isLoading: isTokenUriLoading } = useReadContract({
+  const { data: erc721TokenUri, isLoading: isErc721TokenUriLoading } = useReadContract({
     address: tokenAddress,
     abi: erc721Abi,
     functionName: "tokenURI",
     args: [tokenId],
-    query: { enabled: Boolean(tokenAddress && form.tokenId) },
+    query: { enabled: Boolean(tokenAddress && form.tokenId && form.tokenType === "ERC721") },
   });
+  const { data: erc1155TokenUri, isLoading: isErc1155TokenUriLoading } = useReadContract({
+    address: tokenAddress,
+    abi: erc1155Abi,
+    functionName: "uri",
+    args: [tokenId],
+    query: { enabled: Boolean(tokenAddress && form.tokenId && form.tokenType === "ERC1155") },
+  });
+  const { data: erc1155Balance } = useReadContract({
+    address: tokenAddress,
+    abi: erc1155Abi,
+    functionName: "balanceOf",
+    args: [address || "0x0000000000000000000000000000000000000000", tokenId],
+    query: { enabled: Boolean(address && tokenAddress && form.tokenId && form.tokenType === "ERC1155") },
+  });
+  const { data: isErc1155ApprovedForFactory } = useReadContract({
+    address: tokenAddress,
+    abi: erc1155Abi,
+    functionName: "isApprovedForAll",
+    args: [
+      address || "0x0000000000000000000000000000000000000000",
+      factoryInfo?.address || "0x0000000000000000000000000000000000000000",
+    ],
+    query: { enabled: Boolean(address && tokenAddress && factoryInfo?.address && form.tokenType === "ERC1155") },
+  });
+
+  const tokenUri = erc721TokenUri || erc1155TokenUri;
 
   useEffect(() => {
     if (!tokenUri || !tokenAddress || !form.tokenId) {
@@ -99,7 +132,14 @@ const CreateAuctionPage: NextPage = () => {
   };
 
   const usePlatformNft = () => {
-    if (nftInfo?.address) updateForm("tokenContract", nftInfo.address);
+    if (!nftInfo?.address) return;
+
+    setForm(current => ({
+      ...current,
+      amount: "1",
+      tokenContract: nftInfo.address,
+      tokenType: "ERC721",
+    }));
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -114,29 +154,48 @@ const CreateAuctionPage: NextPage = () => {
     }
 
     try {
+      if (form.tokenType === "ERC1155" && erc1155Balance !== undefined && parsedAmount! > erc1155Balance) {
+        notification.error(`You only own ${erc1155Balance.toString()} of this ERC-1155 token.`);
+        return;
+      }
+
       const reservePrice = parseEther(form.reservePrice);
       const duration = secondsFromHours(form.durationHours);
       const item = buildAuctionItem({
         assetType: form.assetType === "Digital" ? AssetType.Digital : AssetType.Physical,
         metadataURI: typeof tokenUri === "string" ? tokenUri : "",
+        tokenType: form.tokenType === "ERC721" ? TokenType.ERC721 : TokenType.ERC1155,
         tokenContract: form.tokenContract as Address,
         tokenId: parsedTokenId!,
+        amount: parsedAmount!,
       });
 
-      notification.info("Approving AuctionFactory to escrow this NFT.");
-      const approvalHash = await writeTokenAsync({
-        address: form.tokenContract as Address,
-        abi: erc721Abi,
-        functionName: "approve",
-        args: [factoryAddress!, parsedTokenId!],
-      });
+      if (form.tokenType === "ERC1155" && isErc1155ApprovedForFactory) {
+        notification.info("Factory already has permission for this collection. Creating auction.");
+      } else {
+        notification.info("Approving AuctionFactory to escrow this NFT.");
+        const approvalHash =
+          form.tokenType === "ERC721"
+            ? await writeTokenAsync({
+                address: form.tokenContract as Address,
+                abi: erc721Abi,
+                functionName: "approve",
+                args: [factoryAddress!, parsedTokenId!],
+              })
+            : await writeTokenAsync({
+                address: form.tokenContract as Address,
+                abi: erc1155Abi,
+                functionName: "setApprovalForAll",
+                args: [factoryAddress!, true],
+              });
 
-      if (approvalHash && publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+        if (approvalHash && publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+        }
+        if (!approvalHash) return;
+
+        notification.success("Factory approved. Creating auction.");
       }
-      if (!approvalHash) return;
-
-      notification.success("Factory approved. Creating auction.");
 
       if (form.auctionType === "English") {
         await writeFactoryAsync({
@@ -160,8 +219,8 @@ const CreateAuctionPage: NextPage = () => {
   const isPending = isApproving || isCreating;
   const tokenLabel = useMemo(() => {
     if (!form.tokenContract || !form.tokenId) return undefined;
-    return `${form.tokenContract.slice(0, 6)}...${form.tokenContract.slice(-4)} / #${form.tokenId}`;
-  }, [form.tokenContract, form.tokenId]);
+    return `${form.tokenType} ${form.tokenContract.slice(0, 6)}...${form.tokenContract.slice(-4)} / #${form.tokenId}`;
+  }, [form.tokenContract, form.tokenId, form.tokenType]);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
@@ -202,6 +261,25 @@ const CreateAuctionPage: NextPage = () => {
           </div>
 
           <label className="form-control">
+            <span className="label-text text-slate-300">Token standard</span>
+            <select
+              className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+              disabled={isPending}
+              onChange={event =>
+                setForm(current => ({
+                  ...current,
+                  amount: event.target.value === "ERC721" ? "1" : current.amount,
+                  tokenType: event.target.value as CreateAuctionForm["tokenType"],
+                }))
+              }
+              value={form.tokenType}
+            >
+              <option value="ERC721">ERC-721</option>
+              <option value="ERC1155">ERC-1155</option>
+            </select>
+          </label>
+
+          <label className="form-control">
             <span className="label-text text-slate-300">Token contract</span>
             <div className="join w-full">
               <input
@@ -222,20 +300,44 @@ const CreateAuctionPage: NextPage = () => {
             </div>
           </label>
 
-          <label className="form-control">
-            <span className="label-text text-slate-300">Token ID</span>
-            <input
-              className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-              disabled={isPending}
-              inputMode="numeric"
-              min="0"
-              onChange={event => updateForm("tokenId", event.target.value)}
-              placeholder="0"
-              step="1"
-              type="number"
-              value={form.tokenId}
-            />
-          </label>
+          <div className={form.tokenType === "ERC1155" ? "grid gap-4 sm:grid-cols-2" : ""}>
+            <label className="form-control">
+              <span className="label-text text-slate-300">Token ID</span>
+              <input
+                className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                disabled={isPending}
+                inputMode="numeric"
+                min="0"
+                onChange={event => updateForm("tokenId", event.target.value)}
+                placeholder="0"
+                step="1"
+                type="number"
+                value={form.tokenId}
+              />
+            </label>
+
+            {form.tokenType === "ERC1155" && (
+              <label className="form-control">
+                <span className="label-text text-slate-300">Amount</span>
+                <input
+                  className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                  disabled={isPending}
+                  inputMode="numeric"
+                  min="1"
+                  onChange={event => updateForm("amount", event.target.value)}
+                  placeholder="1"
+                  step="1"
+                  type="number"
+                  value={form.amount}
+                />
+                {erc1155Balance !== undefined && (
+                  <span className="label-text-alt mt-1 text-slate-500">
+                    Available in your wallet: {erc1155Balance.toString()}
+                  </span>
+                )}
+              </label>
+            )}
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <PriceInput
@@ -281,10 +383,16 @@ const CreateAuctionPage: NextPage = () => {
 
         <aside className="space-y-4">
           <NftMetadataPreview
-            isLoading={isTokenUriLoading || isMetadataLoading}
+            isLoading={isErc721TokenUriLoading || isErc1155TokenUriLoading || isMetadataLoading}
             metadata={metadata}
             tokenLabel={tokenLabel}
           />
+          {form.tokenType === "ERC1155" && !isErc1155ApprovedForFactory && (
+            <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+              Creating this auction will ask your wallet for collection permission so ChainBid can transfer the selected
+              tokens into escrow.
+            </div>
+          )}
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
             <p className="m-0 text-sm text-slate-500">AuctionFactory</p>
             <p className="m-0 mt-2 break-all text-sm font-semibold text-white">

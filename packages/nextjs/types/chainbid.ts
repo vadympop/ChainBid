@@ -106,8 +106,10 @@ export type CreateItemForm = {
 export type CreateAuctionForm = {
   auctionType: "English" | "Dutch";
   assetType: "Digital" | "Physical";
+  tokenType: "ERC721" | "ERC1155";
   tokenContract: string;
   tokenId: string;
+  amount: string;
   reservePrice: string;
   startPrice: string;
   durationHours: string;

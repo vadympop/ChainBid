@@ -45,6 +45,16 @@ export const erc721Abi = [
 export const erc1155Abi = [
   {
     type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "isApprovedForAll",
     stateMutability: "view",
     inputs: [
