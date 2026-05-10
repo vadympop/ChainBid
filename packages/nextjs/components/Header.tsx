@@ -1,47 +1,90 @@
 "use client";
 
 import React, { useRef } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { hardhat } from "viem/chains";
-import { Bars3Icon, BugAntIcon } from "@heroicons/react/24/outline";
+import {
+  Bars3Icon,
+  ChartBarIcon,
+  CubeIcon,
+  PlusCircleIcon,
+  RectangleStackIcon,
+  Squares2X2Icon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { FaucetButton, RainbowKitCustomConnectButton } from "~~/components/scaffold-eth";
 import { useOutsideClick, useTargetNetwork } from "~~/hooks/scaffold-eth";
 
 type HeaderMenuLink = {
   label: string;
   href: string;
-  icon?: React.ReactNode;
+  icon: React.ReactNode;
 };
 
 export const menuLinks: HeaderMenuLink[] = [
   {
-    label: "Home",
+    label: "Auctions",
     href: "/",
+    icon: <Squares2X2Icon className="h-5 w-5" />,
   },
   {
-    label: "Debug Contracts",
+    label: "Create item",
+    href: "/create-item",
+    icon: <CubeIcon className="h-5 w-5" />,
+  },
+  {
+    label: "Create auction",
+    href: "/create-auction",
+    icon: <PlusCircleIcon className="h-5 w-5" />,
+  },
+  {
+    label: "Portfolio",
+    href: "/portfolio",
+    icon: <RectangleStackIcon className="h-5 w-5" />,
+  },
+  {
+    label: "Debug",
     href: "/debug",
-    icon: <BugAntIcon className="h-4 w-4" />,
+    icon: <ChartBarIcon className="h-5 w-5" />,
   },
 ];
 
-export const HeaderMenuLinks = () => {
+const getPageTitle = (pathname: string) => {
+  if (pathname.startsWith("/create-item")) return "Create item NFT";
+  if (pathname.startsWith("/create-auction")) return "Create auction";
+  if (pathname.startsWith("/auction/")) return "Auction detail";
+  if (pathname.startsWith("/portfolio")) return "Portfolio";
+  if (pathname.startsWith("/debug")) return "Debug contracts";
+  return "Marketplace";
+};
+
+const getPageSubtitle = (pathname: string) => {
+  if (pathname.startsWith("/create-item")) return "Pin metadata and mint a ChainBid item certificate.";
+  if (pathname.startsWith("/create-auction")) return "Approve the factory and list an NFT-backed auction.";
+  if (pathname.startsWith("/auction/")) return "Bid, buy, finalize, withdraw, or confirm physical delivery.";
+  if (pathname.startsWith("/portfolio")) return "Track your created auctions and platform item NFTs.";
+  return "Live English and Dutch auctions backed by NFTs.";
+};
+
+const HeaderMenuLinks = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
 
   return (
     <>
       {menuLinks.map(({ label, href, icon }) => {
-        const isActive = pathname === href;
+        const isActive = href === "/" ? pathname === "/" || pathname === "/auctions" : pathname.startsWith(href);
+
         return (
           <li key={href}>
             <Link
               href={href}
-              passHref
-              className={`${
-                isActive ? "bg-secondary shadow-md" : ""
-              } hover:bg-secondary hover:shadow-md focus:!bg-secondary active:!text-neutral py-1.5 px-3 text-sm rounded-full gap-2 grid grid-flow-col`}
+              onClick={onNavigate}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
+                isActive
+                  ? "bg-blue-500 text-white shadow-lg shadow-blue-950/30"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+              }`}
             >
               {icon}
               <span>{label}</span>
@@ -53,51 +96,79 @@ export const HeaderMenuLinks = () => {
   );
 };
 
-/**
- * Site header
- */
+const Brand = () => (
+  <Link href="/" className="flex items-center gap-3">
+    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-black text-white">
+      C
+    </span>
+    <span>
+      <span className="block text-base font-bold text-white">ChainBid</span>
+      <span className="block text-xs text-slate-500">NFT auction desk</span>
+    </span>
+  </Link>
+);
+
 export const Header = () => {
+  const pathname = usePathname();
   const { targetNetwork } = useTargetNetwork();
   const isLocalNetwork = targetNetwork.id === hardhat.id;
+  const drawerRef = useRef<HTMLDetailsElement>(null);
 
-  const burgerMenuRef = useRef<HTMLDetailsElement>(null);
-  useOutsideClick(burgerMenuRef, () => {
-    burgerMenuRef?.current?.removeAttribute("open");
+  useOutsideClick(drawerRef, () => {
+    drawerRef.current?.removeAttribute("open");
   });
 
+  const closeDrawer = () => drawerRef.current?.removeAttribute("open");
+
   return (
-    <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 shadow-md shadow-secondary px-0 sm:px-2">
-      <div className="navbar-start w-auto lg:w-1/2">
-        <details className="dropdown" ref={burgerMenuRef}>
-          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent">
-            <Bars3Icon className="h-1/2" />
-          </summary>
-          <ul
-            className="menu menu-compact dropdown-content mt-3 p-2 shadow-sm bg-base-100 rounded-box w-52"
-            onClick={() => {
-              burgerMenuRef?.current?.removeAttribute("open");
-            }}
-          >
+    <>
+      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 border-r border-white/10 bg-[#070a12] px-4 py-5 lg:block">
+        <Brand />
+        <nav className="mt-8">
+          <ul className="space-y-1">
             <HeaderMenuLinks />
           </ul>
-        </details>
-        <Link href="/" passHref className="hidden lg:flex items-center gap-2 ml-4 mr-6 shrink-0">
-          <div className="flex relative w-10 h-10">
-            <Image alt="SE2 logo" className="cursor-pointer" fill src="/logo.svg" />
+        </nav>
+        <div className="absolute bottom-5 left-4 right-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-slate-500">Network</p>
+          <p className="m-0 mt-1 text-sm font-semibold text-white">{targetNetwork.name}</p>
+        </div>
+      </aside>
+
+      <header className="fixed left-0 right-0 top-0 z-20 border-b border-white/10 bg-[#05070d]/95 backdrop-blur lg:left-64">
+        <div className="flex min-h-20 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <details className="dropdown lg:hidden" ref={drawerRef}>
+              <summary className="btn btn-square btn-ghost border border-white/10 text-white">
+                <Bars3Icon className="h-5 w-5" />
+              </summary>
+              <div className="dropdown-content z-40 mt-3 w-72 rounded-lg border border-white/10 bg-[#070a12] p-4 shadow-2xl">
+                <div className="mb-5 flex items-center justify-between">
+                  <Brand />
+                  <button
+                    className="btn btn-square btn-ghost btn-sm text-slate-400"
+                    onClick={closeDrawer}
+                    type="button"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+                <ul className="space-y-1">
+                  <HeaderMenuLinks onNavigate={closeDrawer} />
+                </ul>
+              </div>
+            </details>
+            <div className="min-w-0">
+              <h1 className="m-0 truncate text-xl font-semibold text-white sm:text-2xl">{getPageTitle(pathname)}</h1>
+              <p className="m-0 mt-1 hidden truncate text-sm text-slate-500 sm:block">{getPageSubtitle(pathname)}</p>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="font-bold leading-tight">Scaffold-ETH</span>
-            <span className="text-xs">Ethereum dev stack</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <RainbowKitCustomConnectButton />
+            {isLocalNetwork && <FaucetButton />}
           </div>
-        </Link>
-        <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
-          <HeaderMenuLinks />
-        </ul>
-      </div>
-      <div className="navbar-end grow mr-4">
-        <RainbowKitCustomConnectButton />
-        {isLocalNetwork && <FaucetButton />}
-      </div>
-    </div>
+        </div>
+      </header>
+    </>
   );
 };
