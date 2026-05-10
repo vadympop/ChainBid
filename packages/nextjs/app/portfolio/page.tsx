@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { NextPage } from "next";
+import { zeroAddress } from "viem";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 import { useScaffoldEventHistory, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -24,7 +25,7 @@ const PortfolioPage: NextPage = () => {
     contractName: "AuctionNFT",
     eventName: "Transfer",
     fromBlock: 0n,
-    filters: address ? { to: address } : undefined,
+    filters: address ? { from: zeroAddress, to: address } : undefined,
     watch: true,
     enabled: Boolean(address),
   });
