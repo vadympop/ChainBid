@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { NextPage } from "next";
-import { type Address, isAddress, parseEther } from "viem";
+import { type Address, encodeAbiParameters, isAddress, keccak256, parseEther, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
@@ -13,8 +13,15 @@ import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
 import { useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AssetType, AuctionType, TokenType } from "~~/types/chainbid";
-import type { AuctionRecord, ChainBidMetadata, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
-import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
+import type {
+  AuctionRecord,
+  ChainBidMetadata,
+  DutchAuctionInfo,
+  EnglishAuctionInfo,
+  VickreyAuctionInfo,
+  VickreyBidCommitment,
+} from "~~/types/chainbid";
+import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi, vickreyAuctionAbi } from "~~/utils/chainbid/abis";
 import {
   AUCTION_REFRESH_INTERVAL_MS,
   TOKEN_TYPE_LABELS,
@@ -24,11 +31,52 @@ import {
   getDutchPrice,
   getEnglishPrice,
   getTimeLeft,
+  getVickreyAuctionStatus,
+  getVickreyPhaseEndTime,
+  getVickreyPrice,
   isZeroAddress,
   normalizeAuctionItem,
 } from "~~/utils/chainbid/auction";
 import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
+import { chainBidFieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
+
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
+
+const isBytes32Hex = (value: string): value is `0x${string}` => /^0x[0-9a-fA-F]{64}$/.test(value);
+
+const generateSecret = () => {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return `0x${Array.from(bytes)
+    .map(byte => byte.toString(16).padStart(2, "0"))
+    .join("")}` as `0x${string}`;
+};
+
+const parseEthInput = (value: string) => {
+  if (!value) return undefined;
+
+  try {
+    return parseEther(value);
+  } catch {
+    return undefined;
+  }
+};
+
+const getVickreyCommitmentHash = (bidAmount: string, secret: string) => {
+  const parsedBid = parseEthInput(bidAmount);
+  if (parsedBid === undefined || !isBytes32Hex(secret)) return undefined;
+
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { name: "bidAmount", type: "uint256" },
+        { name: "secret", type: "bytes32" },
+      ],
+      [parsedBid, secret],
+    ),
+  );
+};
 
 const DetailRow = ({ label, value }: { label: string; value: string }) => (
   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
@@ -45,8 +93,16 @@ const AuctionDetailPage: NextPage = () => {
   const { writeContractAsync, isPending } = useChainBidWriteContract();
   const now = useAuctionNow();
   const [bidAmount, setBidAmount] = useState("");
+  const [commitBidAmount, setCommitBidAmount] = useState("");
+  const [commitDeposit, setCommitDeposit] = useState("");
+  const [revealBidAmount, setRevealBidAmount] = useState("");
+  const [vickreySecret, setVickreySecret] = useState("");
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
+  const vickreyStorageKey = useMemo(() => {
+    if (!auctionAddress || !connectedAddress) return undefined;
+    return `chainbid:vickrey:${auctionAddress.toLowerCase()}:${connectedAddress.toLowerCase()}`;
+  }, [auctionAddress, connectedAddress]);
 
   const { data: auctions } = useScaffoldReadContract({
     contractName: "AuctionFactory",
@@ -60,7 +116,8 @@ const AuctionDetailPage: NextPage = () => {
 
   const isEnglish = !record || Number(record.auctionType) === AuctionType.English;
   const isDutch = Number(record?.auctionType) === AuctionType.Dutch;
-  const auctionAbi = isDutch ? dutchAuctionAbi : englishAuctionAbi;
+  const isVickrey = Number(record?.auctionType) === AuctionType.Vickrey;
+  const auctionAbi = isVickrey ? vickreyAuctionAbi : isDutch ? dutchAuctionAbi : englishAuctionAbi;
 
   const { data: englishInfo, refetch: refetchEnglish } = useReadContract({
     address: auctionAddress,
@@ -95,9 +152,39 @@ const AuctionDetailPage: NextPage = () => {
       refetchOnWindowFocus: true,
     },
   });
+  const { data: vickreyInfo, refetch: refetchVickrey } = useReadContract({
+    address: auctionAddress,
+    abi: vickreyAuctionAbi,
+    functionName: "getAuctionInfo",
+    query: {
+      enabled: Boolean(auctionAddress && isVickrey),
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
+  });
 
-  const info = (isEnglish ? englishInfo : dutchInfo) as EnglishAuctionInfo | DutchAuctionInfo | undefined;
+  const info = (isEnglish ? englishInfo : isDutch ? dutchInfo : vickreyInfo) as
+    | EnglishAuctionInfo
+    | DutchAuctionInfo
+    | VickreyAuctionInfo
+    | undefined;
   const item = useMemo(() => (info ? normalizeAuctionItem(info.item) : undefined), [info]);
+
+  const { data: vickreyCommitment, refetch: refetchVickreyCommitment } = useReadContract({
+    address: auctionAddress,
+    abi: vickreyAuctionAbi,
+    functionName: "commitments",
+    args: [connectedAddress || zeroAddress],
+    query: { enabled: Boolean(auctionAddress && connectedAddress && isVickrey) },
+  });
+  const { data: isVickreyBlocked, refetch: refetchVickreyBlocked } = useReadContract({
+    address: auctionAddress,
+    abi: vickreyAuctionAbi,
+    functionName: "blocked",
+    args: [connectedAddress || zeroAddress],
+    query: { enabled: Boolean(auctionAddress && connectedAddress && isVickrey) },
+  });
 
   const { data: pendingReturns } = useReadContract({
     address: auctionAddress,
@@ -141,17 +228,46 @@ const AuctionDetailPage: NextPage = () => {
     };
   }, [item, tokenUri]);
 
+  useEffect(() => {
+    if (!vickreyStorageKey) {
+      setVickreySecret("");
+      setRevealBidAmount("");
+      return;
+    }
+
+    const storedValue = localStorage.getItem(vickreyStorageKey);
+    if (!storedValue) return;
+
+    try {
+      const parsed = JSON.parse(storedValue) as { secret?: string; bidAmount?: string; deposit?: string };
+      if (parsed.secret && isBytes32Hex(parsed.secret)) setVickreySecret(parsed.secret);
+      if (parsed.bidAmount) {
+        setCommitBidAmount(parsed.bidAmount);
+        setRevealBidAmount(parsed.bidAmount);
+      }
+      if (parsed.deposit) setCommitDeposit(parsed.deposit);
+    } catch {
+      localStorage.removeItem(vickreyStorageKey);
+    }
+  }, [vickreyStorageKey]);
+
   const refetchInfo = async () => {
     if (isEnglish) await refetchEnglish();
     if (isDutch) {
       await refetchDutch();
       await refetchDutchCurrentPrice();
     }
+    if (isVickrey) {
+      await refetchVickrey();
+      await refetchVickreyCommitment();
+      await refetchVickreyBlocked();
+    }
   };
 
   const runAuctionTx = async (
     label: string,
     request: Parameters<typeof writeContractAsync>[0] & { value?: bigint },
+    onSuccess?: () => void,
   ) => {
     if (!auctionAddress) return;
 
@@ -163,10 +279,30 @@ const AuctionDetailPage: NextPage = () => {
         await publicClient.waitForTransactionReceipt({ hash });
       }
       notification.success("Transaction confirmed.");
+      onSuccess?.();
       await refetchInfo();
     } catch (error) {
       notification.error(getParsedError(error));
     }
+  };
+
+  const persistVickreyCommitment = (values: { secret: string; bidAmount?: string; deposit?: string }) => {
+    if (!vickreyStorageKey || !isBytes32Hex(values.secret)) return;
+
+    localStorage.setItem(
+      vickreyStorageKey,
+      JSON.stringify({
+        secret: values.secret,
+        bidAmount: values.bidAmount || revealBidAmount || commitBidAmount,
+        deposit: values.deposit || commitDeposit,
+      }),
+    );
+  };
+
+  const handleGenerateVickreySecret = () => {
+    const nextSecret = generateSecret();
+    setVickreySecret(nextSecret);
+    persistVickreyCommitment({ secret: nextSecret, bidAmount: commitBidAmount, deposit: commitDeposit });
   };
 
   if (!auctionAddress) {
@@ -192,26 +328,83 @@ const AuctionDetailPage: NextPage = () => {
     );
   }
 
-  const status = getAuctionStatus(
-    info.endTime,
-    info.finalized,
-    item.assetType,
-    info.winner,
-    info.receivedConfirmed,
-    now,
-  );
+  const status = isVickrey
+    ? getVickreyAuctionStatus(
+        (info as VickreyAuctionInfo).commitEndTime,
+        (info as VickreyAuctionInfo).revealEndTime,
+        info.finalized,
+        item.assetType,
+        info.winner,
+        info.receivedConfirmed,
+        now,
+      )
+    : getAuctionStatus(
+        (info as EnglishAuctionInfo | DutchAuctionInfo).endTime,
+        info.finalized,
+        item.assetType,
+        info.winner,
+        info.receivedConfirmed,
+        now,
+      );
   const isSeller = connectedAddress?.toLowerCase() === info.seller.toLowerCase();
   const isWinner = connectedAddress?.toLowerCase() === info.winner.toLowerCase();
   const isActive = status === "active";
+  const isCommitPhase = status === "commit";
+  const isRevealPhase = status === "reveal";
   const isEnded = status === "ended";
   const price = isEnglish
     ? getEnglishPrice(info as EnglishAuctionInfo)
-    : (info as DutchAuctionInfo).finalized
+    : isDutch && (info as DutchAuctionInfo).finalized
       ? getDutchPrice(info as DutchAuctionInfo)
-      : (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo));
+      : isDutch
+        ? (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo))
+        : getVickreyPrice(info as VickreyAuctionInfo);
+  const timeTarget = isVickrey
+    ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
+    : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
+  const priceLabel = isEnglish ? "Current bid" : isDutch ? "Current price" : info.finalized ? "Final price" : "Reserve";
+  const secondaryMetricLabel = isVickrey ? "Valid bids" : "Reserve";
+  const secondaryMetricValue = isVickrey
+    ? `${(info as VickreyAuctionInfo).validBidCount.toString()} / ${(info as VickreyAuctionInfo).totalCommitments.toString()}`
+    : formatEth(info.reservePrice);
+  const timeLabel = isVickrey && (isCommitPhase || isRevealPhase) ? `${status} ends` : "Time left";
   const canFinalize = isEnded && !info.finalized;
   const canConfirm = item.assetType === AssetType.Physical && info.finalized && isWinner && !info.receivedConfirmed;
   const hasRefund = (pendingReturns || 0n) > 0n;
+  const userVickreyCommitment = vickreyCommitment
+    ? ({
+        commitment: vickreyCommitment[0],
+        deposit: vickreyCommitment[1],
+        revealed: vickreyCommitment[2],
+        valid: vickreyCommitment[3],
+        bidAmount: vickreyCommitment[4],
+      } satisfies VickreyBidCommitment)
+    : undefined;
+  const hasVickreyCommitment = Boolean(
+    userVickreyCommitment?.commitment && userVickreyCommitment.commitment !== ZERO_BYTES32,
+  );
+  const vickreyCommitmentHash = getVickreyCommitmentHash(commitBidAmount, vickreySecret);
+  const parsedCommitBid = parseEthInput(commitBidAmount);
+  const parsedCommitDeposit = parseEthInput(commitDeposit);
+  const canCommitVickrey = Boolean(
+    isCommitPhase &&
+      !isSeller &&
+      !isVickreyBlocked &&
+      !hasVickreyCommitment &&
+      vickreyCommitmentHash &&
+      parsedCommitBid !== undefined &&
+      parsedCommitDeposit !== undefined &&
+      parsedCommitDeposit >= parsedCommitBid,
+  );
+  const parsedRevealBid = parseEthInput(revealBidAmount);
+  const canRevealVickrey = Boolean(
+    isRevealPhase &&
+      !isVickreyBlocked &&
+      hasVickreyCommitment &&
+      !userVickreyCommitment?.revealed &&
+      parsedRevealBid !== undefined &&
+      isBytes32Hex(vickreySecret),
+  );
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[380px_1fr] lg:px-8">
@@ -228,7 +421,10 @@ const AuctionDetailPage: NextPage = () => {
       <section className="space-y-5">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
           <div className="flex flex-wrap gap-2">
-            <AuctionStatusBadge kind="auction" auctionType={isDutch ? AuctionType.Dutch : AuctionType.English} />
+            <AuctionStatusBadge
+              kind="auction"
+              auctionType={isVickrey ? AuctionType.Vickrey : isDutch ? AuctionType.Dutch : AuctionType.English}
+            />
             <AuctionStatusBadge kind="asset" assetType={item.assetType} />
             <AuctionStatusBadge kind="status" status={status} />
           </div>
@@ -239,9 +435,9 @@ const AuctionDetailPage: NextPage = () => {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <DetailRow label={isEnglish ? "Current bid" : "Current price"} value={formatEth(price)} />
-          <DetailRow label="Reserve" value={formatEth(info.reservePrice)} />
-          <DetailRow label="Time left" value={getTimeLeft(info.endTime, now)} />
+          <DetailRow label={priceLabel} value={formatEth(price)} />
+          <DetailRow label={secondaryMetricLabel} value={secondaryMetricValue} />
+          <DetailRow label={timeLabel} value={getTimeLeft(timeTarget, now)} />
         </div>
 
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
@@ -276,7 +472,7 @@ const AuctionDetailPage: NextPage = () => {
                 Bid
               </button>
             </div>
-          ) : (
+          ) : isDutch ? (
             <button
               className="btn mt-4 rounded-lg bg-blue-600 text-white"
               disabled={!isActive || isSeller || isPending}
@@ -292,6 +488,126 @@ const AuctionDetailPage: NextPage = () => {
             >
               Buy for {formatEth(price)}
             </button>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {Boolean(isVickreyBlocked) && (
+                <p className="m-0 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100">
+                  This wallet is blocked for this auction after an invalid reveal.
+                </p>
+              )}
+
+              {isCommitPhase && (
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <PriceInput
+                      disabled={isSeller || isPending || hasVickreyCommitment}
+                      label="Private bid amount"
+                      onChange={setCommitBidAmount}
+                      value={commitBidAmount}
+                    />
+                    <PriceInput
+                      disabled={isSeller || isPending || hasVickreyCommitment}
+                      label="Deposit"
+                      onChange={setCommitDeposit}
+                      value={commitDeposit}
+                    />
+                  </div>
+                  <label className="form-control">
+                    <span className="label-text text-slate-300">Secret</span>
+                    <div className="join w-full">
+                      <input
+                        className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 font-mono text-xs text-white ${chainBidFieldClass}`}
+                        disabled={isPending || hasVickreyCommitment}
+                        onChange={event => setVickreySecret(event.target.value)}
+                        placeholder="0x..."
+                        value={vickreySecret}
+                      />
+                      <button
+                        className="btn join-item rounded-r-lg border-white/10 bg-white/[0.06] text-slate-200"
+                        disabled={isPending || hasVickreyCommitment}
+                        onClick={handleGenerateVickreySecret}
+                        type="button"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                  </label>
+                  {vickreyCommitmentHash && (
+                    <div className="break-all rounded-lg border border-white/10 bg-slate-950/70 p-3 text-xs text-slate-300">
+                      <span className="font-semibold text-slate-500">Commitment </span>
+                      {vickreyCommitmentHash}
+                    </div>
+                  )}
+                  <button
+                    className="btn rounded-lg bg-blue-600 text-white"
+                    disabled={!canCommitVickrey || isPending}
+                    onClick={() =>
+                      runAuctionTx(
+                        "Submitting Vickrey commitment.",
+                        {
+                          address: auctionAddress,
+                          abi: vickreyAuctionAbi,
+                          functionName: "commit",
+                          args: [vickreyCommitmentHash!],
+                          value: parsedCommitDeposit!,
+                        } as Parameters<typeof writeContractAsync>[0] & { value: bigint },
+                        () =>
+                          persistVickreyCommitment({
+                            secret: vickreySecret,
+                            bidAmount: commitBidAmount,
+                            deposit: commitDeposit,
+                          }),
+                      )
+                    }
+                    type="button"
+                  >
+                    Commit Vickrey bid
+                  </button>
+                </div>
+              )}
+
+              {isRevealPhase && (
+                <div className="space-y-3">
+                  <PriceInput
+                    disabled={isPending || Boolean(userVickreyCommitment?.revealed)}
+                    label="Bid amount"
+                    onChange={setRevealBidAmount}
+                    value={revealBidAmount}
+                  />
+                  <label className="form-control">
+                    <span className="label-text text-slate-300">Secret</span>
+                    <input
+                      className={`input input-bordered border-white/10 bg-slate-950/70 font-mono text-xs text-white ${chainBidFieldClass}`}
+                      disabled={isPending || Boolean(userVickreyCommitment?.revealed)}
+                      onChange={event => setVickreySecret(event.target.value)}
+                      placeholder="0x..."
+                      value={vickreySecret}
+                    />
+                  </label>
+                  <button
+                    className="btn rounded-lg bg-blue-600 text-white"
+                    disabled={!canRevealVickrey || isPending}
+                    onClick={() =>
+                      runAuctionTx("Revealing Vickrey bid.", {
+                        address: auctionAddress,
+                        abi: vickreyAuctionAbi,
+                        functionName: "reveal",
+                        args: [parsedRevealBid!, vickreySecret as `0x${string}`],
+                      })
+                    }
+                    type="button"
+                  >
+                    Reveal bid
+                  </button>
+                </div>
+              )}
+
+              {!isCommitPhase && !isRevealPhase && !hasVickreyCommitment && (
+                <p className="m-0 rounded-lg border border-white/10 bg-white/[0.04] p-3 text-sm text-slate-300">
+                  No commitment found for this connected wallet.
+                </p>
+              )}
+            </div>
           )}
 
           <div className="mt-4 flex flex-wrap gap-3">
@@ -315,7 +631,7 @@ const AuctionDetailPage: NextPage = () => {
               onClick={() =>
                 runAuctionTx("Finalizing auction.", {
                   address: auctionAddress,
-                  abi: isDutch ? dutchAuctionAbi : englishAuctionAbi,
+                  abi: auctionAbi,
                   functionName: "finalize",
                 })
               }
@@ -329,7 +645,7 @@ const AuctionDetailPage: NextPage = () => {
               onClick={() =>
                 runAuctionTx("Confirming physical item receipt.", {
                   address: auctionAddress,
-                  abi: isDutch ? dutchAuctionAbi : englishAuctionAbi,
+                  abi: auctionAbi,
                   functionName: "confirmReceived",
                 })
               }

@@ -9,13 +9,21 @@ import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
 import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import type { AuctionRecord } from "~~/types/chainbid";
 
-type TypeFilter = "All" | "English" | "Dutch";
+type TypeFilter = "All" | "English" | "Dutch" | "Vickrey";
 type AssetFilter = "All" | "Digital" | "Physical";
-type StatusFilter = "All" | "Active" | "Ended" | "Finalized" | "Awaiting confirmation";
+type StatusFilter = "All" | "Active" | "Commit" | "Reveal" | "Ended" | "Finalized" | "Awaiting confirmation";
 
-const typeFilters: TypeFilter[] = ["All", "English", "Dutch"];
+const typeFilters: TypeFilter[] = ["All", "English", "Dutch", "Vickrey"];
 const assetFilters: AssetFilter[] = ["All", "Digital", "Physical"];
-const statusFilters: StatusFilter[] = ["All", "Active", "Ended", "Finalized", "Awaiting confirmation"];
+const statusFilters: StatusFilter[] = [
+  "All",
+  "Active",
+  "Commit",
+  "Reveal",
+  "Ended",
+  "Finalized",
+  "Awaiting confirmation",
+];
 
 const FilterGroup = <T extends string>({
   label,
@@ -74,8 +82,9 @@ const Home: NextPage = () => {
             NFT-backed auctions, without guesswork
           </h2>
           <p className="m-0 mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-            Browse factory-created English and Dutch auction clones. Physical listings use an NFT claim certificate;
-            delivery remains off-chain and buyer confirmation releases payment when supported by the contract.
+            Browse factory-created English, Dutch, and Vickrey auction clones. Physical listings use an NFT claim
+            certificate; delivery remains off-chain and buyer confirmation releases payment when supported by the
+            contract.
           </p>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">

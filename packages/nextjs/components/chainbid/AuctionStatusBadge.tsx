@@ -3,6 +3,8 @@ import { ASSET_TYPE_LABELS, AUCTION_TYPE_LABELS } from "~~/utils/chainbid/auctio
 
 const statusClasses: Record<AuctionStatus, string> = {
   active: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
+  commit: "border-cyan-400/30 bg-cyan-400/10 text-cyan-100",
+  reveal: "border-violet-400/30 bg-violet-400/10 text-violet-100",
   ended: "border-amber-400/30 bg-amber-400/10 text-amber-200",
   finalized: "border-slate-400/30 bg-slate-400/10 text-slate-200",
   "awaiting-confirmation": "border-blue-400/30 bg-blue-400/10 text-blue-200",
@@ -10,6 +12,8 @@ const statusClasses: Record<AuctionStatus, string> = {
 
 const statusLabels: Record<AuctionStatus, string> = {
   active: "Active",
+  commit: "Commit",
+  reveal: "Reveal",
   ended: "Ended",
   finalized: "Finalized",
   "awaiting-confirmation": "Awaiting confirmation",

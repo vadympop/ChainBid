@@ -13,10 +13,10 @@ export enum AssetType {
 export enum AuctionType {
   English = 0,
   Dutch = 1,
-  SealedBid = 2,
+  Vickrey = 2,
 }
 
-export type AuctionStatus = "active" | "ended" | "finalized" | "awaiting-confirmation";
+export type AuctionStatus = "active" | "commit" | "reveal" | "ended" | "finalized" | "awaiting-confirmation";
 
 export type AuctionItem = {
   tokenType: TokenType;
@@ -80,6 +80,31 @@ export type DutchAuctionInfo = {
   receivedConfirmed: boolean;
 };
 
+export type VickreyAuctionInfo = {
+  item: AuctionItem;
+  seller: Address;
+  commitEndTime: bigint;
+  revealEndTime: bigint;
+  finalized: boolean;
+  reservePrice: bigint;
+  highestBidder: Address;
+  highestBid: bigint;
+  secondHighestBid: bigint;
+  validBidCount: bigint;
+  totalCommitments: bigint;
+  winner: Address;
+  finalPrice: bigint;
+  receivedConfirmed: boolean;
+};
+
+export type VickreyBidCommitment = {
+  commitment: `0x${string}`;
+  deposit: bigint;
+  revealed: boolean;
+  valid: boolean;
+  bidAmount: bigint;
+};
+
 export type NormalizedAuction = {
   address: Address;
   auctionType: AuctionType;
@@ -104,7 +129,7 @@ export type CreateItemForm = {
 };
 
 export type CreateAuctionForm = {
-  auctionType: "English" | "Dutch";
+  auctionType: "English" | "Dutch" | "Vickrey";
   assetType: "Digital" | "Physical";
   tokenType: "ERC721" | "ERC1155";
   tokenContract: string;
@@ -113,4 +138,6 @@ export type CreateAuctionForm = {
   reservePrice: string;
   startPrice: string;
   durationHours: string;
+  commitDurationHours: string;
+  revealDurationHours: string;
 };
