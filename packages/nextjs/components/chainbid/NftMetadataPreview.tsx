@@ -1,4 +1,7 @@
+"use client";
+
 /* eslint-disable @next/next/no-img-element */
+import { useEffect, useMemo, useState } from "react";
 import { ChainBidMetadata } from "~~/types/chainbid";
 
 type NftMetadataPreviewProps = {
@@ -8,6 +11,19 @@ type NftMetadataPreviewProps = {
 };
 
 export const NftMetadataPreview = ({ metadata, isLoading, tokenLabel }: NftMetadataPreviewProps) => {
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const images = useMemo(() => {
+    if (!metadata) return [];
+
+    return [metadata.image, ...metadata.images].filter(
+      (image, index, values) => image && values.indexOf(image) === index,
+    );
+  }, [metadata]);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [metadata]);
+
   if (isLoading) {
     return (
       <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
@@ -29,10 +45,31 @@ export const NftMetadataPreview = ({ metadata, isLoading, tokenLabel }: NftMetad
   return (
     <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
       <div className="aspect-[4/3] bg-slate-950">
-        <img src={metadata.image} alt={metadata.name} className="h-full w-full object-cover" />
+        <img
+          src={images[selectedImageIndex] || metadata.image}
+          alt={metadata.name}
+          className="h-full w-full object-cover"
+        />
       </div>
       <div className="space-y-3 p-4">
         {tokenLabel && <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-200">{tokenLabel}</p>}
+        {images.length > 1 && (
+          <div className="grid grid-cols-5 gap-2">
+            {images.map((image, index) => (
+              <button
+                aria-label={`Show image ${index + 1}`}
+                className={`aspect-square overflow-hidden rounded-md border bg-slate-950 transition ${
+                  selectedImageIndex === index ? "border-blue-400" : "border-white/10 hover:border-blue-400/60"
+                }`}
+                key={image}
+                onClick={() => setSelectedImageIndex(index)}
+                type="button"
+              >
+                <img src={image} alt={`${metadata.name} ${index + 1}`} className="h-full w-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
         <div>
           <h3 className="m-0 text-lg font-semibold text-white">{metadata.name}</h3>
           <p className="m-0 mt-1 line-clamp-3 text-sm text-slate-400">{metadata.description || "No description."}</p>
