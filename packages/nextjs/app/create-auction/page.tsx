@@ -18,6 +18,7 @@ import {
   validateTokenAddress,
 } from "~~/utils/chainbid/auction";
 import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
+import { chainBidFieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
 
 const initialForm: CreateAuctionForm = {
@@ -175,7 +176,7 @@ const CreateAuctionPage: NextPage = () => {
             <label className="form-control">
               <span className="label-text text-slate-300">Auction type</span>
               <select
-                className="select select-bordered border-white/10 bg-slate-950/70 text-white"
+                className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
                 disabled={isPending}
                 onChange={event => updateForm("auctionType", event.target.value as CreateAuctionForm["auctionType"])}
                 value={form.auctionType}
@@ -187,7 +188,7 @@ const CreateAuctionPage: NextPage = () => {
             <label className="form-control">
               <span className="label-text text-slate-300">Asset type</span>
               <select
-                className="select select-bordered border-white/10 bg-slate-950/70 text-white"
+                className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
                 disabled={isPending}
                 onChange={event => updateForm("assetType", event.target.value as CreateAuctionForm["assetType"])}
                 value={form.assetType}
@@ -202,7 +203,7 @@ const CreateAuctionPage: NextPage = () => {
             <span className="label-text text-slate-300">Token contract</span>
             <div className="join w-full">
               <input
-                className="input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white"
+                className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
                 disabled={isPending}
                 onChange={event => updateForm("tokenContract", event.target.value)}
                 placeholder="0x..."
@@ -222,7 +223,7 @@ const CreateAuctionPage: NextPage = () => {
           <label className="form-control">
             <span className="label-text text-slate-300">Token ID</span>
             <input
-              className="input input-bordered border-white/10 bg-slate-950/70 text-white"
+              className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
               disabled={isPending}
               inputMode="numeric"
               min="0"
@@ -244,7 +245,7 @@ const CreateAuctionPage: NextPage = () => {
               <span className="label-text text-slate-300">Duration</span>
               <div className="join w-full">
                 <input
-                  className="input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white"
+                  className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
                   disabled={isPending}
                   inputMode="decimal"
                   min="0.17"

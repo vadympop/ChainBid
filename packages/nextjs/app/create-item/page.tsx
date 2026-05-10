@@ -6,6 +6,7 @@ import { useAccount } from "wagmi";
 import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { CreateItemForm } from "~~/types/chainbid";
+import { chainBidFieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
 
 const initialForm: CreateItemForm = {
@@ -98,7 +99,7 @@ const CreateItemPage: NextPage = () => {
           <label className="form-control">
             <span className="label-text text-slate-300">Title</span>
             <input
-              className="input input-bordered border-white/10 bg-slate-950/70 text-white"
+              className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
               disabled={isPending}
               onChange={event => updateForm("title", event.target.value)}
               placeholder="Vintage synth sample pack"
@@ -109,7 +110,7 @@ const CreateItemPage: NextPage = () => {
           <label className="form-control">
             <span className="label-text text-slate-300">Description</span>
             <textarea
-              className="textarea textarea-bordered min-h-32 border-white/10 bg-slate-950/70 text-white"
+              className={`textarea textarea-bordered min-h-32 border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
               disabled={isPending}
               onChange={event => updateForm("description", event.target.value)}
               placeholder="Describe the item, condition, transfer details, or delivery expectations."
@@ -121,7 +122,7 @@ const CreateItemPage: NextPage = () => {
             <label className="form-control">
               <span className="label-text text-slate-300">Asset type</span>
               <select
-                className="select select-bordered border-white/10 bg-slate-950/70 text-white"
+                className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
                 disabled={isPending}
                 onChange={event => updateForm("assetType", event.target.value as CreateItemForm["assetType"])}
                 value={form.assetType}
@@ -133,7 +134,7 @@ const CreateItemPage: NextPage = () => {
             <label className="form-control">
               <span className="label-text text-slate-300">Category</span>
               <input
-                className="input input-bordered border-white/10 bg-slate-950/70 text-white"
+                className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
                 disabled={isPending}
                 onChange={event => updateForm("category", event.target.value)}
                 placeholder="Art, collectibles, music"

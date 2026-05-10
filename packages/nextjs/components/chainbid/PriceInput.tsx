@@ -1,3 +1,5 @@
+import { chainBidFieldClass } from "~~/utils/chainbid/styles";
+
 type PriceInputProps = {
   label: string;
   value: string;
@@ -12,7 +14,7 @@ export const PriceInput = ({ label, value, onChange, placeholder = "0.1", disabl
     <span className="label-text text-slate-300">{label}</span>
     <div className="join w-full">
       <input
-        className="input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white placeholder:text-slate-600"
+        className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white placeholder:text-slate-600 ${chainBidFieldClass}`}
         disabled={disabled}
         inputMode="decimal"
         min="0"

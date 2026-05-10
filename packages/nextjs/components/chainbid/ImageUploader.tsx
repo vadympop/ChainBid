@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { useEffect, useMemo } from "react";
 
 type ImageUploaderProps = {
   files: File[];
@@ -6,11 +7,47 @@ type ImageUploaderProps = {
   disabled?: boolean;
 };
 
+const MAX_IMAGE_COUNT = 5;
+
+const getFileKey = (file: File) => `${file.name}-${file.size}-${file.lastModified}`;
+
 export const ImageUploader = ({ files, onChange, disabled }: ImageUploaderProps) => {
-  const previews = files.map(file => ({
-    file,
-    url: URL.createObjectURL(file),
-  }));
+  const previews = useMemo(
+    () =>
+      files.map(file => ({
+        file,
+        key: getFileKey(file),
+        url: URL.createObjectURL(file),
+      })),
+    [files],
+  );
+
+  useEffect(() => {
+    return () => {
+      previews.forEach(preview => URL.revokeObjectURL(preview.url));
+    };
+  }, [previews]);
+
+  const addFiles = (selectedFiles: FileList | null) => {
+    if (!selectedFiles) return;
+
+    const existingKeys = new Set(files.map(getFileKey));
+    const nextFiles = [...files];
+
+    for (const file of Array.from(selectedFiles)) {
+      if (nextFiles.length >= MAX_IMAGE_COUNT) break;
+      const fileKey = getFileKey(file);
+      if (existingKeys.has(fileKey)) continue;
+      existingKeys.add(fileKey);
+      nextFiles.push(file);
+    }
+
+    onChange(nextFiles);
+  };
+
+  const removeFile = (fileKey: string) => {
+    onChange(files.filter(file => getFileKey(file) !== fileKey));
+  };
 
   return (
     <div className="space-y-3">
@@ -22,19 +59,29 @@ export const ImageUploader = ({ files, onChange, disabled }: ImageUploaderProps)
           className="hidden"
           disabled={disabled}
           multiple
-          onChange={event => onChange(Array.from(event.target.files || []).slice(0, 5))}
+          onChange={event => {
+            addFiles(event.target.files);
+            event.target.value = "";
+          }}
           type="file"
         />
       </label>
 
       {previews.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {previews.map(({ file, url }) => (
-            <div
-              key={`${file.name}-${file.size}`}
-              className="overflow-hidden rounded-lg border border-white/10 bg-white/5"
-            >
-              <img src={url} alt={file.name} className="aspect-square w-full object-cover" />
+          {previews.map(({ file, key, url }) => (
+            <div key={key} className="overflow-hidden rounded-lg border border-white/10 bg-white/5">
+              <div className="relative">
+                <img src={url} alt={file.name} className="aspect-square w-full object-cover" />
+                <button
+                  className="btn btn-circle btn-xs absolute right-1.5 top-1.5 border-white/10 bg-slate-950/80 text-white"
+                  disabled={disabled}
+                  onClick={() => removeFile(key)}
+                  type="button"
+                >
+                  x
+                </button>
+              </div>
               <div className="truncate px-2 py-1 text-xs text-slate-400">{file.name}</div>
             </div>
           ))}
