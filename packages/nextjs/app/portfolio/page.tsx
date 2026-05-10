@@ -1,16 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { NextPage } from "next";
 import { zeroAddress } from "viem";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
 import { useScaffoldEventHistory, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
-import { AuctionRecord } from "~~/types/chainbid";
+import { AuctionRecord, AuctionType } from "~~/types/chainbid";
 import { compactAddress } from "~~/utils/chainbid/auction";
+
+type Tab = "listed" | "won" | "minted";
+
+const typeStyle = (type: AuctionType) => {
+  if (type === AuctionType.English) return { label: "English", bg: "bg-blue-500/20", text: "text-blue-300" };
+  if (type === AuctionType.Dutch) return { label: "Dutch", bg: "bg-orange-500/20", text: "text-orange-300" };
+  return { label: "Vickrey", bg: "bg-violet-500/20", text: "text-violet-300" };
+};
 
 const PortfolioPage: NextPage = () => {
   const { address } = useAccount();
+  const [tab, setTab] = useState<Tab>("listed");
+
   const { data: sellerAuctions } = useScaffoldReadContract({
     contractName: "AuctionFactory",
     functionName: "getAuctionsBySeller",
@@ -21,6 +32,12 @@ const PortfolioPage: NextPage = () => {
     contractName: "AuctionFactory",
     functionName: "getAllAuctions",
   });
+  const { data: wonAuctions } = useScaffoldReadContract({
+    contractName: "AuctionFactory",
+    functionName: "getAuctionsByWinner",
+    args: [address],
+    query: { enabled: Boolean(address) },
+  });
   const { data: transferEvents } = useScaffoldEventHistory({
     contractName: "AuctionNFT",
     eventName: "Transfer",
@@ -30,66 +47,201 @@ const PortfolioPage: NextPage = () => {
     enabled: Boolean(address),
   });
 
-  const created = ((sellerAuctions || []) as Address[]) || [];
-  const won = ((allAuctions || []) as AuctionRecord[]).filter(record => created.includes(record.contractAddress));
+  const createdAddresses = (sellerAuctions || []) as Address[];
+  const allAuctionRecords = (allAuctions || []) as AuctionRecord[];
+  const listedAuctions = allAuctionRecords.filter(r => createdAddresses.includes(r.contractAddress));
+  const wonAuctionRecords = (wonAuctions || []) as AuctionRecord[];
   const mintedTokenIds = (transferEvents || [])
-    .map(event => event.args?.tokenId)
-    .filter((tokenId): tokenId is bigint => typeof tokenId === "bigint");
+    .map(e => e.args?.tokenId)
+    .filter((id): id is bigint => typeof id === "bigint");
+
+  const tabs: [Tab, string][] = [
+    ["listed", "Listed"],
+    ["won", "Won"],
+    ["minted", "Minted NFTs"],
+  ];
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       {!address && (
-        <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-5 text-blue-100">
+        <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-5 text-sm text-blue-100">
           Connect your wallet to view portfolio data.
         </div>
       )}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <p className="m-0 text-sm text-slate-500">Created auctions</p>
-          <p className="m-0 mt-2 text-3xl font-semibold text-white">{created.length}</p>
+      {/* Stats */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Listed</p>
+          <p className="m-0 mt-2 text-4xl font-bold text-blue-400">{listedAuctions.length}</p>
         </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <p className="m-0 text-sm text-slate-500">Platform NFTs minted</p>
-          <p className="m-0 mt-2 text-3xl font-semibold text-white">{mintedTokenIds.length}</p>
+        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Total on platform</p>
+          <p className="m-0 mt-2 text-4xl font-bold text-emerald-400">{allAuctionRecords.length}</p>
         </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <p className="m-0 text-sm text-slate-500">Connected wallet</p>
-          <p className="m-0 mt-2 text-sm font-semibold text-white">{compactAddress(address)}</p>
+        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">NFTs minted</p>
+          <p className="m-0 mt-2 text-4xl font-bold text-amber-400">{mintedTokenIds.length}</p>
         </div>
-      </section>
-
-      <section className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-        <h2 className="m-0 text-lg font-semibold text-white">Created auctions</h2>
-        <div className="mt-4 space-y-2">
-          {won.length === 0 && <p className="m-0 text-sm text-slate-400">No created auctions found for this wallet.</p>}
-          {won.map(record => (
-            <Link
-              key={record.contractAddress}
-              href={`/auction/${record.contractAddress}`}
-              className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm hover:border-blue-400/50"
-            >
-              <span className="font-semibold text-white">{compactAddress(record.contractAddress)}</span>
-              <span className="text-slate-500">Open</span>
-            </Link>
-          ))}
+        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Wallet</p>
+          <p className="m-0 mt-3 break-all font-mono text-xs font-semibold text-slate-300">
+            {address ? compactAddress(address) : "—"}
+          </p>
         </div>
       </section>
 
-      <section className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-        <h2 className="m-0 text-lg font-semibold text-white">Minted platform NFTs</h2>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {mintedTokenIds.length === 0 && <p className="m-0 text-sm text-slate-400">No AuctionNFT mints found yet.</p>}
-          {mintedTokenIds.map(tokenId => (
-            <span
-              key={tokenId.toString()}
-              className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white"
+      {/* Tab bar */}
+      <div className="border-b border-white/10">
+        <div className="flex gap-1">
+          {tabs.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+                tab === id ? "border-blue-500 text-white" : "border-transparent text-slate-500 hover:text-white"
+              }`}
             >
-              Token #{tokenId.toString()}
-            </span>
+              {label}
+            </button>
           ))}
         </div>
-      </section>
+      </div>
+
+      {/* Listed */}
+      {tab === "listed" && (
+        <section>
+          {listedAuctions.length === 0 ? (
+            <p className="text-sm text-slate-500">No auctions listed from this wallet yet.</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-white/10">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.03]">
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Lot
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Format
+                    </th>
+                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listedAuctions.map((record, i) => {
+                    const { label, bg, text } = typeStyle(Number(record.auctionType) as AuctionType);
+                    return (
+                      <tr
+                        key={record.contractAddress}
+                        className={`border-b border-white/5 last:border-0 ${i % 2 === 1 ? "bg-white/[0.015]" : ""}`}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                          {compactAddress(record.contractAddress)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bg} ${text}`}
+                          >
+                            {label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            href={`/auction/${record.contractAddress}`}
+                            className="text-xs font-semibold text-blue-400 hover:text-blue-300"
+                          >
+                            View →
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Won */}
+      {tab === "won" && (
+        <section>
+          {wonAuctionRecords.length === 0 ? (
+            <p className="text-sm text-slate-500">No won auctions found for this wallet.</p>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-white/10">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.03]">
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Lot
+                    </th>
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Format
+                    </th>
+                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wonAuctionRecords.map((record, i) => {
+                    const { label, bg, text } = typeStyle(Number(record.auctionType) as AuctionType);
+                    return (
+                      <tr
+                        key={record.contractAddress}
+                        className={`border-b border-white/5 last:border-0 ${i % 2 === 1 ? "bg-white/[0.015]" : ""}`}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                          {compactAddress(record.contractAddress)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bg} ${text}`}
+                          >
+                            {label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            href={`/auction/${record.contractAddress}`}
+                            className="text-xs font-semibold text-blue-400 hover:text-blue-300"
+                          >
+                            View →
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Minted */}
+      {tab === "minted" && (
+        <section>
+          {mintedTokenIds.length === 0 ? (
+            <p className="text-sm text-slate-500">No AuctionNFT mints found for this wallet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {mintedTokenIds.map(tokenId => (
+                <span
+                  key={tokenId.toString()}
+                  className="rounded-lg border border-white/10 bg-[#0a1224] px-3 py-2 text-sm font-semibold text-white"
+                >
+                  Token #{tokenId.toString()}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 };
