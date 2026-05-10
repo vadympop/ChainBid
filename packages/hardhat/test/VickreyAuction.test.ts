@@ -10,6 +10,7 @@ describe("VickreyAuction", function () {
   let seller: any;
   let bidder1: any;
   let bidder2: any;
+  let bidder3: any;
 
   const tokenId = 1;
   const reservePrice = ethers.parseEther("1");
@@ -18,7 +19,7 @@ describe("VickreyAuction", function () {
   const coder = ethers.AbiCoder.defaultAbiCoder();
 
   beforeEach(async function () {
-    [, seller, bidder1, bidder2] = await ethers.getSigners();
+    [, seller, bidder1, bidder2, bidder3] = await ethers.getSigners();
 
     const ERC721Factory = await ethers.getContractFactory("MockERC721");
     mockERC721 = await ERC721Factory.deploy();
@@ -80,6 +81,25 @@ describe("VickreyAuction", function () {
     expect(await ethers.provider.getBalance(await auction.getAddress())).to.equal(ethers.parseEther("3"));
   });
 
+  it("view helpers expose reveal end time and auction info", async function () {
+    const bidAmount = ethers.parseEther("2");
+    const secret = ethers.id("bidder1");
+    await auction.connect(bidder1).commit(commitmentFor(bidAmount, secret), { value: bidAmount });
+
+    const auctionInfo = await auction.getAuctionInfo();
+
+    expect(await auction.revealEndTime()).to.equal(await auction.endTime());
+    expect(auctionInfo.item.tokenType).to.equal(0n);
+    expect(auctionInfo.seller).to.equal(seller.address);
+    expect(auctionInfo.commitEndTime).to.equal(await auction.commitEndTime());
+    expect(auctionInfo.revealEndTime).to.equal(await auction.endTime());
+    expect(auctionInfo.finalized).to.equal(false);
+    expect(auctionInfo.reservePrice).to.equal(reservePrice);
+    expect(auctionInfo.totalCommitments).to.equal(1n);
+    expect(auctionInfo.winner).to.equal(ethers.ZeroAddress);
+    expect(auctionInfo.receivedConfirmed).to.equal(false);
+  });
+
   it("commit() rejects seller, duplicate bids, zero deposit, and late commits", async function () {
     const commitment = commitmentFor(ethers.parseEther("2"), ethers.id("bidder1"));
 
@@ -87,6 +107,9 @@ describe("VickreyAuction", function () {
       "Seller cannot bid",
     );
     await expect(auction.connect(bidder1).commit(commitment)).to.be.revertedWith("Deposit must be greater than zero");
+    await expect(
+      auction.connect(bidder1).commit(ethers.ZeroHash, { value: ethers.parseEther("2") }),
+    ).to.be.revertedWith("Commitment cannot be empty");
 
     await auction.connect(bidder1).commit(commitment, { value: ethers.parseEther("2") });
     await expect(auction.connect(bidder1).commit(commitment, { value: ethers.parseEther("2") })).to.be.revertedWith(
@@ -118,6 +141,40 @@ describe("VickreyAuction", function () {
     expect(await auction.validBidCount()).to.equal(2n);
   });
 
+  it("reveal() keeps second-highest bid when a lower bid is revealed later", async function () {
+    const bid1 = ethers.parseEther("5");
+    const bid2 = ethers.parseEther("3");
+    const bid3 = ethers.parseEther("2");
+    const secret1 = ethers.id("bidder1");
+    const secret2 = ethers.id("bidder2");
+    const secret3 = ethers.id("bidder3");
+
+    await auction.connect(bidder1).commit(commitmentFor(bid1, secret1), { value: bid1 });
+    await auction.connect(bidder2).commit(commitmentFor(bid2, secret2), { value: bid2 });
+    await auction.connect(bidder3).commit(commitmentFor(bid3, secret3), { value: bid3 });
+    await moveToRevealPhase();
+
+    await auction.connect(bidder1).reveal(bid1, secret1);
+    await auction.connect(bidder2).reveal(bid2, secret2);
+    await auction.connect(bidder3).reveal(bid3, secret3);
+
+    expect(await auction.highestBid()).to.equal(bid1);
+    expect(await auction.secondHighestBid()).to.equal(bid2);
+  });
+
+  it("reveal() rejects missing and duplicate reveals", async function () {
+    const bidAmount = ethers.parseEther("2");
+    const secret = ethers.id("bidder1");
+
+    await auction.connect(bidder1).commit(commitmentFor(bidAmount, secret), { value: bidAmount });
+    await moveToRevealPhase();
+
+    await expect(auction.connect(bidder2).reveal(bidAmount, secret)).to.be.revertedWith("No bid committed");
+
+    await auction.connect(bidder1).reveal(bidAmount, secret);
+    await expect(auction.connect(bidder1).reveal(bidAmount, secret)).to.be.revertedWith("Bid already revealed");
+  });
+
   it("reveal() blocks and immediately refunds a bidder with the wrong secret", async function () {
     const bidAmount = ethers.parseEther("2");
     const deposit = ethers.parseEther("3");
@@ -132,6 +189,22 @@ describe("VickreyAuction", function () {
 
     expect(await auction.blocked(bidder1.address)).to.equal(true);
     expect((await auction.commitments(bidder1.address)).deposit).to.equal(0n);
+  });
+
+  it("reveal() reverts when invalid bid refund fails", async function () {
+    const RejectorFactory = await ethers.getContractFactory("RefundRejector");
+    const refundRejector = await RejectorFactory.deploy();
+    const bidAmount = ethers.parseEther("2");
+    const deposit = ethers.parseEther("3");
+
+    await refundRejector.commitVickrey(await auction.getAddress(), commitmentFor(bidAmount, ethers.id("correct")), {
+      value: deposit,
+    });
+    await moveToRevealPhase();
+
+    await expect(
+      refundRejector.revealVickrey(await auction.getAddress(), bidAmount, ethers.id("wrong")),
+    ).to.be.revertedWith("Refund failed");
   });
 
   it("reveal() blocks and refunds when deposit is below the revealed bid", async function () {
@@ -227,6 +300,31 @@ describe("VickreyAuction", function () {
     expect(await auction.pendingReturns(bidder2.address)).to.equal(ethers.parseEther("4"));
   });
 
+  it("finalize() skips invalidated deposits and keeps exact-price winner refund at zero", async function () {
+    const winningBid = ethers.parseEther("3");
+    const secondBid = ethers.parseEther("3");
+    const invalidBid = ethers.parseEther("2");
+    const secret1 = ethers.id("bidder1");
+    const secret2 = ethers.id("bidder2");
+
+    await auction.connect(bidder1).commit(commitmentFor(winningBid, secret1), { value: winningBid });
+    await auction.connect(bidder2).commit(commitmentFor(secondBid, secret2), { value: secondBid });
+    await auction.connect(bidder3).commit(commitmentFor(invalidBid, ethers.id("correct")), { value: invalidBid });
+    await moveToRevealPhase();
+
+    await auction.connect(bidder1).reveal(winningBid, secret1);
+    await auction.connect(bidder2).reveal(secondBid, secret2);
+    await auction.connect(bidder3).reveal(invalidBid, ethers.id("wrong"));
+    await time.increase(revealDuration + 1);
+
+    await auction.finalize();
+
+    expect(await auction.finalPrice()).to.equal(secondBid);
+    expect(await auction.pendingReturns(bidder1.address)).to.equal(0n);
+    expect(await auction.pendingReturns(bidder2.address)).to.equal(secondBid);
+    expect(await auction.pendingReturns(bidder3.address)).to.equal(0n);
+  });
+
   it("finalize() with physical item holds payment until the winner confirms receipt", async function () {
     const physicalTokenId = 2;
     const bidAmount = ethers.parseEther("5");
@@ -268,5 +366,11 @@ describe("VickreyAuction", function () {
     await expect(auction.connect(bidder1).reveal(bidAmount, secret)).to.be.revertedWith("Reveal phase has ended");
     await auction.finalize();
     await expect(auction.finalize()).to.be.revertedWith("Auction already finalized");
+  });
+
+  it("bid() reverts because Vickrey auctions require commitments", async function () {
+    await expect(auction.connect(bidder1).bid({ value: ethers.parseEther("1") })).to.be.revertedWith(
+      "Use commit() for VickreyAuction",
+    );
   });
 });

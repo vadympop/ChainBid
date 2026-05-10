@@ -68,3 +68,30 @@ contract WithdrawAttacker {
         auction.withdraw();
     }
 }
+
+interface IDutchAuction {
+    function buy() external payable;
+}
+
+interface IVickreyAuction {
+    function commit(bytes32 commitment) external payable;
+    function reveal(uint256 bidAmount, bytes32 secret) external;
+}
+
+contract RefundRejector {
+    function buyDutch(address auction) external payable {
+        IDutchAuction(auction).buy{ value: msg.value }();
+    }
+
+    function commitVickrey(address auction, bytes32 commitment) external payable {
+        IVickreyAuction(auction).commit{ value: msg.value }(commitment);
+    }
+
+    function revealVickrey(address auction, uint256 bidAmount, bytes32 secret) external {
+        IVickreyAuction(auction).reveal(bidAmount, secret);
+    }
+
+    receive() external payable {
+        revert("Refund rejected");
+    }
+}

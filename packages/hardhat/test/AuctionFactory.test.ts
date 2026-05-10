@@ -190,6 +190,30 @@ describe("AuctionFactory", function () {
     expect(await mockERC1155.balanceOf(seller.address, tokenId)).to.equal(1n);
   });
 
+  it("EnglishAuction with ERC1155 item transfers item to winning bidder", async function () {
+    const item = {
+      tokenType: 1, // ERC1155
+      assetType: 0,
+      tokenContract: await mockERC1155.getAddress(),
+      tokenId: tokenId,
+      amount: 2,
+      metadataURI: "",
+    };
+
+    await factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600);
+
+    const auctions = await factory.getAllAuctions();
+    const auction = await ethers.getContractAt("EnglishAuction", auctions[0].contractAddress);
+
+    await auction.connect(owner).bid({ value: ethers.parseEther("2") });
+    await ethers.provider.send("evm_increaseTime", [3601]);
+    await ethers.provider.send("evm_mine", []);
+    await auction.finalize();
+
+    expect(await mockERC1155.balanceOf(owner.address, tokenId)).to.equal(2n);
+    expect(await mockERC1155.balanceOf(auctions[0].contractAddress, tokenId)).to.equal(0n);
+  });
+
   it("createEnglishAuction() reverts when duration is below 10 minutes", async function () {
     const item = {
       tokenType: 0,
@@ -309,6 +333,23 @@ describe("AuctionFactory", function () {
 
     const page2 = await factory.getAuctionsPaginated(1, 1);
     expect(page2.length).to.equal(0);
+  });
+
+  it("getAuctionsPaginated() clamps limit and getTotalAuctions() returns count", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await factory.connect(seller).createEnglishAuction(item, ethers.parseEther("1"), 3600);
+
+    const page = await factory.getAuctionsPaginated(0, 10);
+    expect(page.length).to.equal(1);
+    expect(await factory.getTotalAuctions()).to.equal(1n);
   });
 
   it("AuctionCreated event emitted with correct args", async function () {

@@ -4,6 +4,7 @@ import { ethers } from "hardhat";
 describe("BaseAuction", function () {
   let mockAuction: any;
   let mockERC721: any;
+  let mockERC1155: any;
   let attacker: any;
   let owner: any;
   let addr1: any;
@@ -15,6 +16,9 @@ describe("BaseAuction", function () {
 
     const ERC721Factory = await ethers.getContractFactory("MockERC721");
     mockERC721 = await ERC721Factory.deploy();
+
+    const ERC1155Factory = await ethers.getContractFactory("MockERC1155");
+    mockERC1155 = await ERC1155Factory.deploy();
 
     await mockERC721.mint(owner.address, tokenId);
 
@@ -43,6 +47,41 @@ describe("BaseAuction", function () {
       await mockAuction.transferItem(addr1.address);
       expect(await mockERC721.ownerOf(tokenId)).to.equal(addr1.address);
     });
+
+    it("should transfer ERC1155 items to correct address", async function () {
+      const erc1155TokenId = 2;
+      const amount = 3;
+      await mockERC1155.mint(owner.address, erc1155TokenId, amount);
+
+      const AuctionFactory = await ethers.getContractFactory("MockBaseAuction");
+      const item = {
+        tokenType: 1, // ERC1155
+        assetType: 0, // Digital
+        tokenContract: await mockERC1155.getAddress(),
+        tokenId: erc1155TokenId,
+        amount,
+        metadataURI: "",
+      };
+
+      const erc1155Auction = await AuctionFactory.deploy();
+      await erc1155Auction.initialize(item, owner.address, 3600, ethers.parseEther("1"));
+      await mockERC1155.safeTransferFrom(
+        owner.address,
+        await erc1155Auction.getAddress(),
+        erc1155TokenId,
+        amount,
+        "0x",
+      );
+
+      await erc1155Auction.transferItem(addr1.address);
+
+      expect(await mockERC1155.balanceOf(addr1.address, erc1155TokenId)).to.equal(BigInt(amount));
+    });
+  });
+
+  it("mock bid() and finalize() are callable", async function () {
+    await expect(mockAuction.bid({ value: ethers.parseEther("1") })).to.not.be.reverted;
+    await expect(mockAuction.finalize()).to.not.be.reverted;
   });
 
   describe("Withdrawals", function () {
