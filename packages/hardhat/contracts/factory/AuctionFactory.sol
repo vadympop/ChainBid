@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "../items/AuctionItem.sol";
 import "../auctions/EnglishAuction.sol";
 import "../auctions/DutchAuction.sol";
+import "../auctions/VickreyAuction.sol";
 
 contract AuctionFactory {
     uint256 public constant MIN_AUCTION_DURATION = 10 minutes;
@@ -23,12 +24,14 @@ contract AuctionFactory {
 
     address public immutable englishImpl;
     address public immutable dutchImpl;
+    address public immutable vickreyImpl;
 
     event AuctionCreated(address indexed contractAddress, AuctionType auctionType, address indexed seller);
 
     constructor() {
         englishImpl = address(new EnglishAuction());
         dutchImpl = address(new DutchAuction());
+        vickreyImpl = address(new VickreyAuction());
     }
 
     function createEnglishAuction(
@@ -62,6 +65,24 @@ contract AuctionFactory {
         _escrowItem(item, msg.sender, clone);
 
         _register(clone, AuctionType.Dutch, msg.sender);
+        return clone;
+    }
+
+    function createVickreyAuction(
+        AuctionItem memory item,
+        uint256 reservePrice,
+        uint256 commitDuration,
+        uint256 revealDuration
+    ) external returns (address) {
+        _validateItem(item);
+        _validateDuration(commitDuration);
+        _validateDuration(revealDuration);
+
+        address clone = Clones.clone(vickreyImpl);
+        VickreyAuction(clone).initialize(item, payable(msg.sender), commitDuration, revealDuration, reservePrice);
+        _escrowItem(item, msg.sender, clone);
+
+        _register(clone, AuctionType.Vickrey, msg.sender);
         return clone;
     }
 
