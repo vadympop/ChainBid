@@ -19,7 +19,7 @@ import {
   secondsFromHours,
   validateTokenAddress,
 } from "~~/utils/chainbid/auction";
-import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
+import { fetchChainBidMetadata, getMetadataAssetType } from "~~/utils/chainbid/ipfs";
 import { chainBidFieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
 
@@ -72,6 +72,11 @@ const CreateAuctionPage: NextPage = () => {
   const parsedTokenId = parseTokenIdInput(form.tokenId);
   const parsedAmount = form.tokenType === "ERC1155" ? parseTokenAmountInput(form.amount) : 1n;
   const tokenId = parsedTokenId || 0n;
+  const metadataAssetType = getMetadataAssetType(metadata);
+  const isPlatformAuctionNft =
+    Boolean(nftInfo?.address && tokenAddress) && tokenAddress?.toLowerCase() === nftInfo?.address.toLowerCase();
+  const shouldLockAssetType =
+    isPlatformAuctionNft && (metadataAssetType === "Digital" || metadataAssetType === "Physical");
 
   const { data: erc721TokenUri, isLoading: isErc721TokenUriLoading } = useReadContract({
     address: tokenAddress,
@@ -126,6 +131,12 @@ const CreateAuctionPage: NextPage = () => {
       ignore = true;
     };
   }, [form.tokenId, tokenAddress, tokenId, tokenUri]);
+
+  useEffect(() => {
+    if (metadataAssetType === "Digital" || metadataAssetType === "Physical") {
+      updateForm("assetType", metadataAssetType);
+    }
+  }, [metadataAssetType]);
 
   const updateForm = <K extends keyof CreateAuctionForm>(key: K, value: CreateAuctionForm[K]) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -250,13 +261,16 @@ const CreateAuctionPage: NextPage = () => {
               <span className="label-text text-slate-300">Asset type</span>
               <select
                 className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                disabled={isPending}
+                disabled={isPending || shouldLockAssetType}
                 onChange={event => updateForm("assetType", event.target.value as CreateAuctionForm["assetType"])}
                 value={form.assetType}
               >
                 <option>Digital</option>
                 <option>Physical</option>
               </select>
+              {shouldLockAssetType && (
+                <span className="label-text-alt mt-1 text-slate-500">Matched from this ChainBid item metadata.</span>
+              )}
             </label>
           </div>
 
