@@ -29,11 +29,6 @@ export const menuLinks: HeaderMenuLink[] = [
     icon: <Squares2X2Icon className="h-5 w-5" />,
   },
   {
-    label: "Create item",
-    href: "/create-item",
-    icon: <CubeIcon className="h-5 w-5" />,
-  },
-  {
     label: "Create auction",
     href: "/create-auction",
     icon: <PlusCircleIcon className="h-5 w-5" />,
@@ -43,47 +38,37 @@ export const menuLinks: HeaderMenuLink[] = [
     href: "/portfolio",
     icon: <RectangleStackIcon className="h-5 w-5" />,
   },
-  {
-    label: "Debug",
-    href: "/debug",
-    icon: <ChartBarIcon className="h-5 w-5" />,
-  },
 ];
 
 const getPageTitle = (pathname: string) => {
-  if (pathname.startsWith("/create-item")) return "Create item NFT";
   if (pathname.startsWith("/create-auction")) return "Create auction";
-  if (pathname.startsWith("/auction/")) return "Auction detail";
+  if (pathname.startsWith("/auction/")) return "Auction";
   if (pathname.startsWith("/portfolio")) return "Portfolio";
-  if (pathname.startsWith("/debug")) return "Debug contracts";
   return "Marketplace";
 };
 
 const getPageSubtitle = (pathname: string) => {
-  if (pathname.startsWith("/create-item")) return "Pin metadata and mint a ChainBid item certificate.";
-  if (pathname.startsWith("/create-auction")) return "Approve the factory and list an NFT-backed auction.";
+  if (pathname.startsWith("/create-auction"))
+    return "List an NFT or consign a physical item — we wrap it as a certificate.";
   if (pathname.startsWith("/auction/")) return "Bid, buy, finalize, withdraw, or confirm physical delivery.";
-  if (pathname.startsWith("/portfolio")) return "Track your created auctions and platform item NFTs.";
-  return "Live English, Dutch, and Vickrey auctions backed by NFTs.";
+  if (pathname.startsWith("/portfolio")) return "Active bids, watchlist, wins, and listings.";
+  return "Live & upcoming auctions across English, Dutch, and Vickrey formats.";
 };
 
-const HeaderMenuLinks = ({ onNavigate }: { onNavigate?: () => void }) => {
+const MobileMenuLinks = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
 
   return (
     <>
       {menuLinks.map(({ label, href, icon }) => {
         const isActive = href === "/" ? pathname === "/" || pathname === "/auctions" : pathname.startsWith(href);
-
         return (
           <li key={href}>
             <Link
               href={href}
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
-                isActive
-                  ? "bg-blue-500 text-white shadow-lg shadow-blue-950/30"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+                isActive ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"
               }`}
             >
               {icon}
@@ -96,17 +81,33 @@ const HeaderMenuLinks = ({ onNavigate }: { onNavigate?: () => void }) => {
   );
 };
 
-const Brand = () => (
-  <Link href="/" className="flex items-center gap-3">
-    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-black text-white">
-      C
-    </span>
-    <span>
-      <span className="block text-base font-bold text-white">ChainBid</span>
-      <span className="block text-xs text-slate-500">NFT auction desk</span>
-    </span>
-  </Link>
-);
+const SidebarMenuLinks = () => {
+  const pathname = usePathname();
+
+  return (
+    <>
+      {menuLinks.map(({ label, href, icon }) => {
+        const isActive = href === "/" ? pathname === "/" || pathname === "/auctions" : pathname.startsWith(href);
+        return (
+          <li key={href} className="relative w-full">
+            <span
+              className={`absolute inset-y-1 left-0 w-0.5 rounded-r bg-blue-500 transition-opacity ${isActive ? "opacity-100" : "opacity-0"}`}
+            />
+            <Link
+              href={href}
+              title={label}
+              className={`flex w-full items-center justify-center py-3 transition ${
+                isActive ? "text-white" : "text-slate-500 hover:text-white"
+              }`}
+            >
+              {icon}
+            </Link>
+          </li>
+        );
+      })}
+    </>
+  );
+};
 
 export const Header = () => {
   const pathname = usePathname();
@@ -122,29 +123,39 @@ export const Header = () => {
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 border-r border-white/10 bg-[#070a12] px-4 py-5 lg:block">
-        <Brand />
-        <nav className="mt-8">
+      {/* Desktop sidebar — narrow, icon-only */}
+      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-[72px] flex-col items-center border-r border-white/10 bg-[#070a12] py-4 lg:flex">
+        <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
+          <CubeIcon className="h-5 w-5 text-white" />
+        </Link>
+        <nav className="mt-6 w-full">
           <ul className="space-y-1">
-            <HeaderMenuLinks />
+            <SidebarMenuLinks />
           </ul>
         </nav>
-        <div className="absolute bottom-5 left-4 right-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-slate-500">Network</p>
-          <p className="m-0 mt-1 text-sm font-semibold text-white">{targetNetwork.name}</p>
+        <div className="mt-auto mb-3 flex flex-col items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-green-400" title={targetNetwork.name} />
+          <span className="text-[9px] uppercase tracking-widest text-slate-600">{targetNetwork.name.slice(0, 3)}</span>
         </div>
       </aside>
 
-      <header className="fixed left-0 right-0 top-0 z-20 border-b border-white/10 bg-[#05070d]/95 backdrop-blur lg:left-64">
+      {/* Top header */}
+      <header className="fixed left-0 right-0 top-0 z-20 border-b border-white/10 bg-[#05070d]/95 backdrop-blur lg:left-[72px]">
         <div className="flex min-h-20 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
+            {/* Mobile hamburger */}
             <details className="dropdown lg:hidden" ref={drawerRef}>
               <summary className="btn btn-square btn-ghost border border-white/10 text-white">
                 <Bars3Icon className="h-5 w-5" />
               </summary>
-              <div className="dropdown-content z-40 mt-3 w-72 rounded-lg border border-white/10 bg-[#070a12] p-4 shadow-2xl">
+              <div className="dropdown-content z-40 mt-3 w-72 rounded-xl border border-white/10 bg-[#070a12] p-4 shadow-2xl">
                 <div className="mb-5 flex items-center justify-between">
-                  <Brand />
+                  <Link href="/" className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600">
+                      <CubeIcon className="h-5 w-5 text-white" />
+                    </span>
+                    <span className="text-base font-bold text-white">ChainBid</span>
+                  </Link>
                   <button
                     className="btn btn-square btn-ghost btn-sm text-slate-400"
                     onClick={closeDrawer}
@@ -154,13 +165,13 @@ export const Header = () => {
                   </button>
                 </div>
                 <ul className="space-y-1">
-                  <HeaderMenuLinks onNavigate={closeDrawer} />
+                  <MobileMenuLinks onNavigate={closeDrawer} />
                 </ul>
               </div>
             </details>
             <div className="min-w-0">
-              <h1 className="m-0 truncate text-xl font-semibold text-white sm:text-2xl">{getPageTitle(pathname)}</h1>
-              <p className="m-0 mt-1 hidden truncate text-sm text-slate-500 sm:block">{getPageSubtitle(pathname)}</p>
+              <h1 className="m-0 truncate text-xl font-bold text-white sm:text-2xl">{getPageTitle(pathname)}</h1>
+              <p className="m-0 mt-0.5 hidden truncate text-xs text-slate-500 sm:block">{getPageSubtitle(pathname)}</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">

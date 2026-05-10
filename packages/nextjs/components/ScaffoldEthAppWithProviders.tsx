@@ -14,9 +14,9 @@ import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
-      <div className="min-h-screen bg-[#05070d] text-slate-100">
+      <div className="min-h-screen bg-black text-slate-100">
         <Header />
-        <main className="min-h-screen pt-20 lg:pl-64">{children}</main>
+        <main className="min-h-screen pt-20 lg:pl-[72px]">{children}</main>
       </div>
       <Toaster />
     </>

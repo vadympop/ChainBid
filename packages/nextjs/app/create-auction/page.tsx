@@ -2,10 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { NextPage } from "next";
-import { type Address, parseEther } from "viem";
+import { type Address, decodeEventLog, parseEther } from "viem";
+import { CheckCircleIcon, CubeIcon, RectangleStackIcon } from "@heroicons/react/24/outline";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
+import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
-import { PriceInput } from "~~/components/chainbid/PriceInput";
 import { useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { AssetType, CreateAuctionForm, TokenType } from "~~/types/chainbid";
@@ -20,8 +21,23 @@ import {
   validateTokenAddress,
 } from "~~/utils/chainbid/auction";
 import { fetchChainBidMetadata, getMetadataAssetType } from "~~/utils/chainbid/ipfs";
-import { chainBidFieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
+
+type PhysicalItemForm = {
+  title: string;
+  category: string;
+  description: string;
+  estimatedValue: string;
+  images: File[];
+};
+
+const initialPhysicalForm: PhysicalItemForm = {
+  title: "",
+  category: "",
+  description: "",
+  estimatedValue: "",
+  images: [],
+};
 
 const initialForm: CreateAuctionForm = {
   auctionType: "English",
@@ -69,6 +85,47 @@ const validateForm = (form: CreateAuctionForm, address?: string, factoryAddress?
   return "";
 };
 
+const erc721TransferAbi = [
+  {
+    type: "event",
+    name: "Transfer",
+    inputs: [
+      { indexed: true, name: "from", type: "address" },
+      { indexed: true, name: "to", type: "address" },
+      { indexed: true, name: "tokenId", type: "uint256" },
+    ],
+  },
+] as const;
+
+const auctionNftMintAbi = [
+  {
+    type: "function",
+    name: "mint",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "tokenURI_", type: "string" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+const StepBadge = ({ n }: { n: number }) => (
+  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+    {n}
+  </span>
+);
+
+const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-center justify-between border-t border-white/5 py-2 text-sm first:border-0 first:pt-0">
+    <span className="text-slate-500">{label}</span>
+    <span className="font-semibold text-white">{value}</span>
+  </div>
+);
+
+const FIELD =
+  "w-full rounded-lg border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
+
 const CreateAuctionPage: NextPage = () => {
   const { address } = useAccount();
   const publicClient = usePublicClient();
@@ -79,6 +136,8 @@ const CreateAuctionPage: NextPage = () => {
   });
   const { writeContractAsync: writeTokenAsync, isPending: isApproving } = useChainBidWriteContract();
   const [form, setForm] = useState<CreateAuctionForm>(initialForm);
+  const [physicalForm, setPhysicalForm] = useState<PhysicalItemForm>(initialPhysicalForm);
+  const [isMintingCert, setIsMintingCert] = useState(false);
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
 
@@ -91,6 +150,10 @@ const CreateAuctionPage: NextPage = () => {
     Boolean(nftInfo?.address && tokenAddress) && tokenAddress?.toLowerCase() === nftInfo?.address.toLowerCase();
   const shouldLockAssetType =
     isPlatformAuctionNft && (metadataAssetType === "Digital" || metadataAssetType === "Physical");
+
+  const isCertMinted =
+    form.assetType === "Physical" &&
+    Boolean(nftInfo?.address && form.tokenContract?.toLowerCase() === nftInfo?.address.toLowerCase() && form.tokenId);
 
   const { data: erc721TokenUri, isLoading: isErc721TokenUriLoading } = useReadContract({
     address: tokenAddress,
@@ -165,6 +228,76 @@ const CreateAuctionPage: NextPage = () => {
       tokenContract: nftInfo.address,
       tokenType: "ERC721",
     }));
+  };
+
+  const handleMintCertificate = async () => {
+    if (!address || !nftInfo?.address) {
+      notification.error("Connect your wallet first.");
+      return;
+    }
+    if (!physicalForm.title || !physicalForm.description || physicalForm.images.length === 0) {
+      notification.error("Fill in title, description, and upload at least one image.");
+      return;
+    }
+
+    try {
+      setIsMintingCert(true);
+
+      const uploadData = new FormData();
+      uploadData.append("name", physicalForm.title);
+      uploadData.append("description", physicalForm.description);
+      uploadData.append("assetType", "Physical");
+      if (physicalForm.category) uploadData.append("category", physicalForm.category);
+      physicalForm.images.forEach(img => uploadData.append("images", img));
+
+      notification.info("Uploading item metadata to IPFS…");
+      const res = await fetch("/api/pinata/upload", { method: "POST", body: uploadData });
+      const json = (await res.json()) as { metadataUri?: string; error?: string };
+
+      if (!res.ok) {
+        notification.error(json.error || "Metadata upload failed.");
+        return;
+      }
+
+      const metadataUri = json.metadataUri!;
+
+      notification.info("Minting NFT certificate…");
+      const hash = await writeTokenAsync({
+        address: nftInfo.address as Address,
+        abi: auctionNftMintAbi,
+        functionName: "mint",
+        args: [address, metadataUri],
+      });
+
+      if (!hash || !publicClient) return;
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+      let mintedTokenId: bigint | undefined;
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({ abi: erc721TransferAbi, data: log.data, topics: log.topics });
+          if (decoded.eventName === "Transfer") {
+            mintedTokenId = decoded.args.tokenId;
+            break;
+          }
+        } catch {
+          /* skip non-matching logs */
+        }
+      }
+
+      if (mintedTokenId === undefined) {
+        notification.error("Mint succeeded but could not read token ID from receipt.");
+        return;
+      }
+
+      updateForm("tokenContract", nftInfo.address);
+      updateForm("tokenId", mintedTokenId.toString());
+      notification.success(`NFT certificate minted — Token #${mintedTokenId.toString()}`);
+    } catch (error) {
+      notification.error(getParsedError(error));
+    } finally {
+      setIsMintingCert(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -251,169 +384,462 @@ const CreateAuctionPage: NextPage = () => {
     }
   };
 
-  const isPending = isApproving || isCreating;
+  const isPending = isApproving || isCreating || isMintingCert;
   const tokenLabel = useMemo(() => {
     if (!form.tokenContract || !form.tokenId) return undefined;
     return `${form.tokenType} ${form.tokenContract.slice(0, 6)}...${form.tokenContract.slice(-4)} / #${form.tokenId}`;
   }, [form.tokenContract, form.tokenId, form.tokenType]);
 
+  const formatLabel =
+    form.auctionType === "English"
+      ? "English ascending"
+      : form.auctionType === "Dutch"
+        ? "Dutch descending"
+        : "Vickrey sealed";
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-      <form className="grid gap-6 lg:grid-cols-[1fr_360px]" onSubmit={handleSubmit}>
-        <section className="space-y-5 rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <div>
-            <h2 className="m-0 text-xl font-semibold text-white">Auction terms</h2>
-            <p className="m-0 mt-2 text-sm text-slate-400">
-              The factory receives approval, creates the clone, and escrows the NFT into that clone.
-            </p>
+      <form className="grid gap-5 lg:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
+        {/* ── Main column ── */}
+        <div className="space-y-4">
+
+          {/* Item-type selector */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[
+              {
+                id: "Digital" as const,
+                label: "On-chain NFT",
+                desc: "Existing token in your wallet — list directly from contract.",
+                Icon: CubeIcon,
+              },
+              {
+                id: "Physical" as const,
+                label: "Physical item",
+                desc: "We mint an NFT certificate that represents the item; we hold custody and ship to winner.",
+                Icon: RectangleStackIcon,
+              },
+            ].map(({ id, label, desc, Icon }) => {
+              const active = form.assetType === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={isPending || (id === "Digital" && shouldLockAssetType)}
+                  onClick={() => {
+                    if (!shouldLockAssetType) {
+                      updateForm("assetType", id);
+                      if (id === "Digital") {
+                        updateForm("tokenContract", "");
+                        updateForm("tokenId", "");
+                        setPhysicalForm(initialPhysicalForm);
+                      }
+                    }
+                  }}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    active ? "border-blue-500 bg-blue-600/10" : "border-white/10 bg-[#0a1224] hover:border-white/20"
+                  }`}
+                >
+                  <div className="mb-2 flex items-center gap-3">
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${active ? "bg-blue-600" : "bg-white/5"}`}
+                    >
+                      <Icon className={`h-4 w-4 ${active ? "text-white" : "text-slate-400"}`} />
+                    </span>
+                    <span className="font-semibold text-white">{label}</span>
+                    {active && <CheckCircleIcon className="ml-auto h-5 w-5 shrink-0 text-blue-400" />}
+                  </div>
+                  <p className="m-0 text-xs text-slate-400">{desc}</p>
+                </button>
+              );
+            })}
           </div>
+          {shouldLockAssetType && (
+            <p className="text-xs text-slate-500">Asset type matched from ChainBid item metadata.</p>
+          )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="form-control">
-              <span className="label-text text-slate-300">Auction type</span>
-              <select
-                className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                disabled={isPending}
-                onChange={event => updateForm("auctionType", event.target.value as CreateAuctionForm["auctionType"])}
-                value={form.auctionType}
-              >
-                <option>English</option>
-                <option>Dutch</option>
-                <option>Vickrey</option>
-              </select>
-            </label>
-            <label className="form-control">
-              <span className="label-text text-slate-300">Asset type</span>
-              <select
-                className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                disabled={isPending || shouldLockAssetType}
-                onChange={event => updateForm("assetType", event.target.value as CreateAuctionForm["assetType"])}
-                value={form.assetType}
-              >
-                <option>Digital</option>
-                <option>Physical</option>
-              </select>
-              {shouldLockAssetType && (
-                <span className="label-text-alt mt-1 text-slate-500">Matched from this ChainBid item metadata.</span>
-              )}
-            </label>
-          </div>
-
-          <label className="form-control">
-            <span className="label-text text-slate-300">Token standard</span>
-            <select
-              className={`select select-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-              disabled={isPending}
-              onChange={event =>
-                setForm(current => ({
-                  ...current,
-                  amount: event.target.value === "ERC721" ? "1" : current.amount,
-                  tokenType: event.target.value as CreateAuctionForm["tokenType"],
-                }))
-              }
-              value={form.tokenType}
-            >
-              <option value="ERC721">ERC-721</option>
-              <option value="ERC1155">ERC-1155</option>
-            </select>
-          </label>
-
-          <label className="form-control">
-            <span className="label-text text-slate-300">Token contract</span>
-            <div className="join w-full">
-              <input
-                className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                disabled={isPending}
-                onChange={event => updateForm("tokenContract", event.target.value)}
-                placeholder="0x..."
-                value={form.tokenContract}
-              />
-              <button
-                className="btn join-item rounded-r-lg border-white/10 bg-white/[0.06] text-slate-200"
-                disabled={!nftInfo?.address || isPending}
-                onClick={usePlatformNft}
-                type="button"
-              >
-                AuctionNFT
-              </button>
+          {/* Step 1 */}
+          <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a1224] p-5">
+            <div className="flex items-center gap-3">
+              <StepBadge n={1} />
+              <h3 className="m-0 text-base font-semibold text-white">
+                {form.assetType === "Physical" ? "Item details & certificate" : "Select token"}
+              </h3>
             </div>
-          </label>
 
-          <div className={form.tokenType === "ERC1155" ? "grid gap-4 sm:grid-cols-2" : ""}>
-            <label className="form-control">
-              <span className="label-text text-slate-300">Token ID</span>
-              <input
-                className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                disabled={isPending}
-                inputMode="numeric"
-                min="0"
-                onChange={event => updateForm("tokenId", event.target.value)}
-                placeholder="0"
-                step="1"
-                type="number"
-                value={form.tokenId}
-              />
-            </label>
+            {form.assetType === "Physical" ? (
+              /* ── Physical item form ── */
+              <>
+                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-xs leading-relaxed text-blue-200">
+                  ChainBid mints an ERC-721 certificate representing your item. The NFT is used as the auction lot — the
+                  winner receives custody transfer and shipping.
+                </div>
 
-            {form.tokenType === "ERC1155" && (
-              <label className="form-control">
-                <span className="label-text text-slate-300">Amount</span>
-                <input
-                  className={`input input-bordered border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                  disabled={isPending}
-                  inputMode="numeric"
-                  min="1"
-                  onChange={event => updateForm("amount", event.target.value)}
-                  placeholder="1"
-                  step="1"
-                  type="number"
-                  value={form.amount}
-                />
-                {erc1155Balance !== undefined && (
-                  <span className="label-text-alt mt-1 text-slate-500">
-                    Available in your wallet: {erc1155Balance.toString()}
-                  </span>
+                {isCertMinted ? (
+                  /* Certificate minted — show summary */
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                      <CheckCircleIcon className="h-5 w-5 shrink-0" />
+                      NFT certificate minted
+                    </div>
+                    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/5 text-sm">
+                      <div className="bg-black/30 px-3 py-2">
+                        <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                          Contract
+                        </p>
+                        <p className="m-0 mt-1 font-mono text-xs text-white">
+                          {form.tokenContract.slice(0, 8)}…{form.tokenContract.slice(-6)}
+                        </p>
+                      </div>
+                      <div className="bg-black/30 px-3 py-2">
+                        <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                          Token ID
+                        </p>
+                        <p className="m-0 mt-1 font-mono text-xs text-white">#{form.tokenId}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs text-slate-500 underline hover:text-white"
+                      onClick={() => {
+                        updateForm("tokenContract", "");
+                        updateForm("tokenId", "");
+                        setPhysicalForm(initialPhysicalForm);
+                      }}
+                    >
+                      Mint a different certificate
+                    </button>
+                  </div>
+                ) : (
+                  /* Physical item metadata form */
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                          Item title
+                        </p>
+                        <input
+                          className={FIELD}
+                          disabled={isMintingCert}
+                          onChange={e => setPhysicalForm(f => ({ ...f, title: e.target.value }))}
+                          placeholder="e.g. Vintage Rolex Submariner"
+                          value={physicalForm.title}
+                        />
+                      </div>
+                      <div>
+                        <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                          Category
+                        </p>
+                        <select
+                          className={FIELD + " cursor-pointer"}
+                          disabled={isMintingCert}
+                          onChange={e => setPhysicalForm(f => ({ ...f, category: e.target.value }))}
+                          value={physicalForm.category}
+                        >
+                          <option value="">Select category</option>
+                          {["Art", "Collectibles", "Electronics", "Fashion", "Jewelry", "Sports", "Watches", "Other"].map(c => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                        Description
+                      </p>
+                      <textarea
+                        className={FIELD + " min-h-24 resize-none"}
+                        disabled={isMintingCert}
+                        onChange={e => setPhysicalForm(f => ({ ...f, description: e.target.value }))}
+                        placeholder="Describe the item — condition, history, notable features…"
+                        rows={3}
+                        value={physicalForm.description}
+                      />
+                    </div>
+
+                    <div>
+                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                        Estimated value (USD)
+                      </p>
+                      <input
+                        className={FIELD}
+                        disabled={isMintingCert}
+                        inputMode="decimal"
+                        min="0"
+                        onChange={e => setPhysicalForm(f => ({ ...f, estimatedValue: e.target.value }))}
+                        placeholder="0.00"
+                        step="any"
+                        type="number"
+                        value={physicalForm.estimatedValue}
+                      />
+                    </div>
+
+                    <div>
+                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                        Photos
+                      </p>
+                      <ImageUploader
+                        disabled={isMintingCert}
+                        files={physicalForm.images}
+                        onChange={images => setPhysicalForm(f => ({ ...f, images }))}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={
+                        isMintingCert ||
+                        !physicalForm.title ||
+                        !physicalForm.description ||
+                        physicalForm.images.length === 0
+                      }
+                      onClick={handleMintCertificate}
+                      className="w-full rounded-xl border border-blue-500/30 bg-blue-600/10 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isMintingCert ? "Minting certificate…" : "Mint NFT certificate"}
+                    </button>
+                  </div>
                 )}
-              </label>
-            )}
-          </div>
+              </>
+            ) : (
+              /* ── Digital NFT fields ── */
+              <>
+                {/* Token standard */}
+                <div>
+                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                    Token standard
+                  </p>
+                  <div className="flex gap-2">
+                    {(["ERC721", "ERC1155"] as const).map(std => (
+                      <button
+                        key={std}
+                        type="button"
+                        disabled={isPending}
+                        onClick={() =>
+                          setForm(current => ({
+                            ...current,
+                            amount: std === "ERC721" ? "1" : current.amount,
+                            tokenType: std,
+                          }))
+                        }
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                          form.tokenType === std
+                            ? "bg-blue-600 text-white"
+                            : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        {std === "ERC721" ? "ERC-721" : "ERC-1155"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <PriceInput
-              disabled={isPending}
-              label="Reserve price"
-              onChange={value => updateForm("reservePrice", value)}
-              value={form.reservePrice}
-            />
-            {form.auctionType !== "Vickrey" && (
-              <label className="form-control">
-                <span className="label-text text-slate-300">Duration</span>
-                <div className="join w-full">
+                {/* Token contract */}
+                <div>
+                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                    Token contract
+                  </p>
+                  <div className="flex overflow-hidden rounded-lg border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
+                    <input
+                      className="min-w-0 flex-1 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none disabled:opacity-50"
+                      disabled={isPending}
+                      onChange={event => updateForm("tokenContract", event.target.value)}
+                      placeholder="0x..."
+                      value={form.tokenContract}
+                    />
+                    <button
+                      className="shrink-0 border-l border-white/10 bg-white/5 px-3 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+                      disabled={!nftInfo?.address || isPending}
+                      onClick={usePlatformNft}
+                      type="button"
+                    >
+                      AuctionNFT
+                    </button>
+                  </div>
+                </div>
+
+                {/* Token ID + Amount */}
+                <div className={form.tokenType === "ERC1155" ? "grid gap-3 sm:grid-cols-2" : ""}>
+                  <div>
+                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      Token ID
+                    </p>
+                    <input
+                      className={FIELD}
+                      disabled={isPending}
+                      inputMode="numeric"
+                      min="0"
+                      onChange={event => updateForm("tokenId", event.target.value)}
+                      placeholder="0"
+                      step="1"
+                      type="number"
+                      value={form.tokenId}
+                    />
+                  </div>
+                  {form.tokenType === "ERC1155" && (
+                    <div>
+                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                        Amount
+                      </p>
+                      <input
+                        className={FIELD}
+                        disabled={isPending}
+                        inputMode="numeric"
+                        min="1"
+                        onChange={event => updateForm("amount", event.target.value)}
+                        placeholder="1"
+                        step="1"
+                        type="number"
+                        value={form.amount}
+                      />
+                      {erc1155Balance !== undefined && (
+                        <p className="m-0 mt-1 text-xs text-slate-500">Available: {erc1155Balance.toString()}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Contract + Token ID info strip */}
+                {form.tokenContract && form.tokenId && (
+                  <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/5 text-sm">
+                    <div className="bg-black/30 px-3 py-2">
+                      <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Contract</p>
+                      <p className="m-0 mt-1 font-mono text-xs text-white">
+                        {form.tokenContract.slice(0, 8)}…{form.tokenContract.slice(-6)}
+                      </p>
+                    </div>
+                    <div className="bg-black/30 px-3 py-2">
+                      <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Token ID</p>
+                      <p className="m-0 mt-1 font-mono text-xs text-white">#{form.tokenId}</p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          {/* Step 2: Auction format */}
+          <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a1224] p-5">
+            <div className="flex items-center gap-3">
+              <StepBadge n={2} />
+              <h3 className="m-0 text-base font-semibold text-white">Auction format</h3>
+            </div>
+
+            {/* Format cards */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(
+                [
+                  { type: "English", title: "English ascending", desc: "Bids rise; highest at close wins." },
+                  { type: "Dutch", title: "Dutch descending", desc: "Price falls until accepted. First buyer wins." },
+                  { type: "Vickrey", title: "Vickrey sealed", desc: "Sealed bids; second-highest price wins." },
+                ] as const
+              ).map(({ type, title, desc }) => {
+                const active = form.auctionType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => updateForm("auctionType", type)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      active ? "border-blue-500 bg-blue-600/10" : "border-white/10 bg-black/30 hover:border-white/20"
+                    }`}
+                  >
+                    <p className={`m-0 text-sm font-bold ${active ? "text-white" : "text-slate-300"}`}>{title}</p>
+                    <p className="m-0 mt-1 text-xs text-slate-500">{desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Pricing */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                  Reserve (Ξ)
+                </p>
+                <input
+                  className={FIELD}
+                  disabled={isPending}
+                  inputMode="decimal"
+                  min="0"
+                  onChange={event => updateForm("reservePrice", event.target.value)}
+                  placeholder="0.0"
+                  step="any"
+                  type="number"
+                  value={form.reservePrice}
+                />
+              </div>
+              {form.auctionType === "Dutch" && (
+                <div>
+                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                    Start price (Ξ)
+                  </p>
                   <input
-                    className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                    className={FIELD}
                     disabled={isPending}
                     inputMode="decimal"
-                    min="0.17"
-                    onChange={event => updateForm("durationHours", event.target.value)}
+                    min="0"
+                    onChange={event => updateForm("startPrice", event.target.value)}
+                    placeholder="0.0"
                     step="any"
                     type="number"
-                    value={form.durationHours}
+                    value={form.startPrice}
                   />
-                  <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
-                    hours
-                  </span>
+                  <p className="m-0 mt-1 text-xs text-slate-500">Must be ≥ reserve price.</p>
                 </div>
-              </label>
-            )}
-          </div>
+              )}
+            </div>
 
-          {form.auctionType === "Vickrey" && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="form-control">
-                <span className="label-text text-slate-300">Commit duration</span>
-                <div className="join w-full">
+            {/* Duration slider (English / Dutch) */}
+            {form.auctionType !== "Vickrey" && (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Duration</p>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      className="w-20 rounded-lg border border-white/10 bg-[#070d1a] px-2 py-1.5 text-right text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50"
+                      disabled={isPending}
+                      inputMode="decimal"
+                      min="1"
+                      max="168"
+                      step="1"
+                      type="number"
+                      onChange={event => updateForm("durationHours", event.target.value)}
+                      value={form.durationHours}
+                    />
+                    <span className="text-xs text-slate-500">h</span>
+                  </div>
+                </div>
+                <input
+                  className="mt-2 w-full accent-blue-600"
+                  disabled={isPending}
+                  max="168"
+                  min="1"
+                  step="1"
+                  type="range"
+                  onChange={event => updateForm("durationHours", event.target.value)}
+                  value={form.durationHours}
+                />
+                <div className="mt-1 flex justify-between text-[10px] text-slate-600">
+                  <span>1h</span>
+                  <span>72h</span>
+                  <span>1w</span>
+                </div>
+              </div>
+            )}
+
+            {/* Vickrey commit / reveal durations */}
+            {form.auctionType === "Vickrey" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                    Commit duration (h)
+                  </p>
                   <input
-                    className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                    className={FIELD}
                     disabled={isPending}
                     inputMode="decimal"
                     min="0.17"
@@ -422,16 +848,13 @@ const CreateAuctionPage: NextPage = () => {
                     type="number"
                     value={form.commitDurationHours}
                   />
-                  <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
-                    hours
-                  </span>
                 </div>
-              </label>
-              <label className="form-control">
-                <span className="label-text text-slate-300">Reveal duration</span>
-                <div className="join w-full">
+                <div>
+                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                    Reveal duration (h)
+                  </p>
                   <input
-                    className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                    className={FIELD}
                     disabled={isPending}
                     inputMode="decimal"
                     min="0.17"
@@ -440,47 +863,65 @@ const CreateAuctionPage: NextPage = () => {
                     type="number"
                     value={form.revealDurationHours}
                   />
-                  <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
-                    hours
-                  </span>
                 </div>
-              </label>
-            </div>
-          )}
+              </div>
+            )}
 
-          {form.auctionType === "Dutch" && (
-            <PriceInput
-              disabled={isPending}
-              hint="Must be at least the reserve price."
-              label="Dutch start price"
-              onChange={value => updateForm("startPrice", value)}
-              value={form.startPrice}
-            />
-          )}
+            {form.tokenType === "ERC1155" && !isErc1155ApprovedForFactory && form.assetType === "Digital" && (
+              <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+                Creating this auction will ask your wallet for collection permission so ChainBid can transfer the
+                selected tokens into escrow.
+              </div>
+            )}
+          </section>
+        </div>
 
-          <button className="btn rounded-lg bg-blue-600 text-white" disabled={isPending} type="submit">
-            {isPending ? "Submitting..." : "Approve factory and create auction"}
-          </button>
-        </section>
-
+        {/* ── Right sidebar ── */}
         <aside className="space-y-4">
+          {/* Summary */}
+          <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+            <p className="m-0 mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Summary</p>
+            <SummaryRow label="Type" value={form.assetType === "Physical" ? "Physical item" : "On-chain NFT"} />
+            <SummaryRow label="Format" value={formatLabel} />
+            {form.auctionType !== "Vickrey" ? (
+              <SummaryRow label="Duration" value={`${form.durationHours}h`} />
+            ) : (
+              <SummaryRow
+                label="Commit / Reveal"
+                value={`${form.commitDurationHours}h / ${form.revealDurationHours}h`}
+              />
+            )}
+            {form.assetType === "Digital" && <SummaryRow label="Token standard" value={form.tokenType} />}
+          </div>
+
+          {/* NFT preview */}
           <NftMetadataPreview
             isLoading={isErc721TokenUriLoading || isErc1155TokenUriLoading || isMetadataLoading}
             metadata={metadata}
             tokenLabel={tokenLabel}
           />
-          {form.tokenType === "ERC1155" && !isErc1155ApprovedForFactory && (
-            <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-              Creating this auction will ask your wallet for collection permission so ChainBid can transfer the selected
-              tokens into escrow.
-            </div>
-          )}
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-            <p className="m-0 text-sm text-slate-500">AuctionFactory</p>
-            <p className="m-0 mt-2 break-all text-sm font-semibold text-white">
+
+          {/* Factory */}
+          <div className="rounded-xl border border-white/10 bg-[#0a1224] px-4 py-3">
+            <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">AuctionFactory</p>
+            <p className="m-0 mt-1 break-all font-mono text-xs text-white">
               {factoryInfo?.address || "Not deployed"}
             </p>
           </div>
+
+          {/* CTA */}
+          <button
+            className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-bold text-white transition hover:from-blue-500 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isPending || (form.assetType === "Physical" && !isCertMinted)}
+            type="submit"
+          >
+            {isPending ? "Submitting…" : "Sign & list"}
+          </button>
+          {form.assetType === "Physical" && !isCertMinted ? (
+            <p className="m-0 text-center text-xs text-slate-500">Mint the NFT certificate in Step 1 first.</p>
+          ) : (
+            <p className="m-0 text-center text-xs text-slate-500">Approves transfer + creates listing on chain.</p>
+          )}
         </aside>
       </form>
     </div>
