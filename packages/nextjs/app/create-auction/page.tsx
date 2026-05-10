@@ -229,6 +229,7 @@ const CreateAuctionPage: NextPage = () => {
               min="0"
               onChange={event => updateForm("tokenId", event.target.value)}
               placeholder="0"
+              step="1"
               type="number"
               value={form.tokenId}
             />
@@ -250,7 +251,7 @@ const CreateAuctionPage: NextPage = () => {
                   inputMode="decimal"
                   min="0.17"
                   onChange={event => updateForm("durationHours", event.target.value)}
-                  step="0.1"
+                  step="any"
                   type="number"
                   value={form.durationHours}
                 />

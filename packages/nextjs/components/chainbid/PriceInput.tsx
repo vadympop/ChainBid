@@ -20,6 +20,7 @@ export const PriceInput = ({ label, value, onChange, placeholder = "0.1", disabl
         min="0"
         onChange={event => onChange(event.target.value)}
         placeholder={placeholder}
+        step="any"
         type="number"
         value={value}
       />
