@@ -796,21 +796,35 @@ const CreateAuctionPage: NextPage = () => {
             {/* Duration slider (English / Dutch) */}
             {form.auctionType !== "Vickrey" && (
               <div>
-                <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                  Duration · {form.durationHours}h
-                </p>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Duration</p>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      className="w-20 rounded-lg border border-white/10 bg-[#070d1a] px-2 py-1.5 text-right text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50"
+                      disabled={isPending}
+                      inputMode="decimal"
+                      min="1"
+                      max="168"
+                      step="1"
+                      type="number"
+                      onChange={event => updateForm("durationHours", event.target.value)}
+                      value={form.durationHours}
+                    />
+                    <span className="text-xs text-slate-500">h</span>
+                  </div>
+                </div>
                 <input
                   className="mt-2 w-full accent-blue-600"
                   disabled={isPending}
                   max="168"
-                  min="0.17"
+                  min="1"
                   step="1"
                   type="range"
                   onChange={event => updateForm("durationHours", event.target.value)}
                   value={form.durationHours}
                 />
                 <div className="mt-1 flex justify-between text-[10px] text-slate-600">
-                  <span>6h</span>
+                  <span>1h</span>
                   <span>72h</span>
                   <span>1w</span>
                 </div>
