@@ -26,4 +26,16 @@ This command deploys a test smart contract to the local network.
 yarn start
 ```
 
+Run tests:
+
+```
+yarn test
+```
+
+Run tests with coverage:
+
+```
+yarn coverage
+```
+
 Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
