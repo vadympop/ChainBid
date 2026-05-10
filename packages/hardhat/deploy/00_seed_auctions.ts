@@ -20,9 +20,11 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
   const timestamp = BigInt(Date.now());
   const tokenId1 = timestamp;
   const tokenId2 = timestamp + 1n;
+  const tokenId3 = timestamp + 2n;
 
   await mockContract.mint(deployer, tokenId1, { gasLimit: 200_000 });
   await mockContract.mint(deployer, tokenId2, { gasLimit: 200_000 });
+  await mockContract.mint(deployer, tokenId3, { gasLimit: 200_000 });
 
   // 3. Get deployed Factory
   const factoryDeployment = await hre.deployments.get("AuctionFactory");
@@ -34,6 +36,7 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
   // Approve the factory to escrow these NFTs into newly created auction clones.
   await mockContract.connect(deployerSigner).approve(factoryAddress, tokenId1, { gasLimit: 200_000 });
   await mockContract.connect(deployerSigner).approve(factoryAddress, tokenId2, { gasLimit: 200_000 });
+  await mockContract.connect(deployerSigner).approve(factoryAddress, tokenId3, { gasLimit: 200_000 });
 
   const duration = 3600; // 1 hour
 
@@ -73,6 +76,26 @@ const seedAuctions: DeployFunction = async function (hre: HardhatRuntimeEnvironm
     .createDutchAuction(dutchItem, dutchStart, dutchReserve, duration, { gasLimit: 1_000_000 });
   await tx2.wait();
   console.log("Dutch Auction created.");
+
+  // 6. Create Vickrey Auction
+  const vickreyItem = {
+    tokenType: 0, // ERC721
+    assetType: 0, // Digital
+    tokenContract: mockToken.address,
+    tokenId: tokenId3,
+    amount: 1,
+    metadataURI: "",
+  };
+  const vickreyReserve = parseEther("1");
+  const commitDuration = 1800; // 30 minutes
+  const revealDuration = 1800; // 30 minutes
+
+  console.log("Creating Vickrey Auction...");
+  const tx3 = await factory
+    .connect(deployerSigner)
+    .createVickreyAuction(vickreyItem, vickreyReserve, commitDuration, revealDuration, { gasLimit: 1_000_000 });
+  await tx3.wait();
+  console.log("Vickrey Auction created.");
 };
 
 export default seedAuctions;
