@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { NextPage } from "next";
 import { type Address, isAddress, parseEther } from "viem";
-import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { PriceInput } from "~~/components/chainbid/PriceInput";
 import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
+import { useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AssetType, AuctionType, TokenType } from "~~/types/chainbid";
 import type { AuctionRecord, ChainBidMetadata, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
@@ -40,7 +41,7 @@ const AuctionDetailPage: NextPage = () => {
   const auctionAddress = params.address && isAddress(params.address) ? (params.address as Address) : undefined;
   const { address: connectedAddress } = useAccount();
   const publicClient = usePublicClient();
-  const { writeContractAsync, isPending } = useWriteContract();
+  const { writeContractAsync, isPending } = useChainBidWriteContract();
   const now = useAuctionNow();
   const [bidAmount, setBidAmount] = useState("");
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
@@ -155,6 +156,7 @@ const AuctionDetailPage: NextPage = () => {
     try {
       notification.info(label);
       const hash = await writeContractAsync(request);
+      if (!hash) return;
       if (hash && publicClient) {
         await publicClient.waitForTransactionReceipt({ hash });
       }

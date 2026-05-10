@@ -3,9 +3,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { NextPage } from "next";
 import { type Address, parseEther } from "viem";
-import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { PriceInput } from "~~/components/chainbid/PriceInput";
+import { useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { AssetType, CreateAuctionForm } from "~~/types/chainbid";
 import type { ChainBidMetadata } from "~~/types/chainbid";
@@ -56,7 +57,7 @@ const CreateAuctionPage: NextPage = () => {
   const { writeContractAsync: writeFactoryAsync, isMining: isCreating } = useScaffoldWriteContract({
     contractName: "AuctionFactory",
   });
-  const { writeContractAsync: writeTokenAsync, isPending: isApproving } = useWriteContract();
+  const { writeContractAsync: writeTokenAsync, isPending: isApproving } = useChainBidWriteContract();
   const [form, setForm] = useState<CreateAuctionForm>(initialForm);
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
@@ -133,6 +134,7 @@ const CreateAuctionPage: NextPage = () => {
       if (approvalHash && publicClient) {
         await publicClient.waitForTransactionReceipt({ hash: approvalHash });
       }
+      if (!approvalHash) return;
 
       notification.success("Factory approved. Creating auction.");
 
