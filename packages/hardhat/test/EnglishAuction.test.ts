@@ -97,6 +97,14 @@ describe("EnglishAuction", function () {
     expect(newEndTime).to.equal(initialEndTime + 300n);
   });
 
+  it("Bid outside anti-sniping window does not extend time", async function () {
+    const initialEndTime = await auction.endTime();
+
+    await auction.connect(bidder1).bid({ value: ethers.parseEther("2") });
+
+    expect(await auction.endTime()).to.equal(initialEndTime);
+  });
+
   it("finalize() before end reverts", async function () {
     await expect(auction.finalize()).to.be.revertedWith("Auction not yet ended");
   });
@@ -170,6 +178,14 @@ describe("EnglishAuction", function () {
 
     await physicalAuction.connect(bidder1).confirmReceived();
     await expect(physicalAuction.connect(bidder1).confirmReceived()).to.be.revertedWith("Receipt already confirmed");
+  });
+
+  it("confirmReceived() reverts before a physical auction is sold", async function () {
+    const physicalTokenId = 4;
+    await mockERC721.mint(seller.address, physicalTokenId);
+    const physicalAuction = await createEnglishAuctionForToken(physicalTokenId, 1);
+
+    await expect(physicalAuction.connect(bidder1).confirmReceived()).to.be.revertedWith("Auction not sold");
   });
 
   it("Double finalize() reverts", async function () {

@@ -93,6 +93,16 @@ describe("DutchAuction", function () {
     expect(finalBalance).to.equal(initialBalance - expectedPrice - BigInt(gasUsed));
   });
 
+  it("buy() reverts when excess ETH refund fails", async function () {
+    const RejectorFactory = await ethers.getContractFactory("RefundRejector");
+    const refundRejector = await RejectorFactory.deploy();
+    const currentPrice = await auction.getCurrentPrice();
+
+    await expect(
+      refundRejector.buyDutch(await auction.getAddress(), { value: currentPrice + ethers.parseEther("1") }),
+    ).to.be.revertedWith("Refund failed");
+  });
+
   it("buy() for digital item sends ETH to seller immediately", async function () {
     const expectedPrice = await getNextBlockPrice(auction);
     const initialBalance = await ethers.provider.getBalance(seller.address);
@@ -105,6 +115,17 @@ describe("DutchAuction", function () {
     expect(await auction.winner()).to.equal(buyer.address);
     expect(await auction.finalPrice()).to.equal(expectedPrice);
     expect(await auction.isAwaitingConfirmation()).to.equal(false);
+  });
+
+  it("buy() accepts exact current price without refund", async function () {
+    const expectedPrice = await getNextBlockPrice(auction);
+
+    await expect(() => auction.connect(buyer).buy({ value: expectedPrice })).to.changeEtherBalances(
+      [buyer, await auction.getAddress()],
+      [-expectedPrice, 0n],
+    );
+
+    expect(await auction.finalPrice()).to.equal(expectedPrice);
   });
 
   it("getAuctionInfo() returns Dutch auction and settlement details", async function () {
@@ -157,6 +178,16 @@ describe("DutchAuction", function () {
     await auction.connect(buyer).buy({ value: currentPrice });
 
     await expect(auction.connect(buyer2).buy({ value: currentPrice })).to.be.revertedWith("Auction already finalized");
+  });
+
+  it("bid() reverts and finalize() after no sale returns item to seller", async function () {
+    await expect(auction.connect(buyer).bid({ value: startPrice })).to.be.revertedWith("Use buy() for DutchAuction");
+
+    await time.increase(duration + 1);
+    await auction.finalize();
+
+    expect(await mockERC721.ownerOf(tokenId)).to.equal(seller.address);
+    await expect(auction.finalize()).to.be.revertedWith("Auction already finalized");
   });
 
   it("Price never goes below reservePrice", async function () {

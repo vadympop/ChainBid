@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { hardhat } from "viem/chains";
 import {
   Bars3Icon,
-  ChartBarIcon,
   CubeIcon,
   PlusCircleIcon,
   RectangleStackIcon,
