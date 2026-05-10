@@ -9,6 +9,10 @@ import "../auctions/EnglishAuction.sol";
 import "../auctions/DutchAuction.sol";
 import "../auctions/VickreyAuction.sol";
 
+interface IBaseAuction {
+    function winner() external view returns (address);
+}
+
 contract AuctionFactory {
     uint256 public constant MIN_AUCTION_DURATION = 10 minutes;
 
@@ -129,6 +133,27 @@ contract AuctionFactory {
 
     function getAuctionsBySeller(address seller) external view returns (address[] memory) {
         return sellerAuctions[seller];
+    }
+
+    function getAuctionsByWinner(address _winner) external view returns (AuctionRecord[] memory) {
+        uint256 total = allAuctions.length;
+        uint256 count = 0;
+
+        for (uint256 i = 0; i < total; i++) {
+            if (IBaseAuction(allAuctions[i].contractAddress).winner() == _winner) {
+                count++;
+            }
+        }
+
+        AuctionRecord[] memory result = new AuctionRecord[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < total; i++) {
+            if (IBaseAuction(allAuctions[i].contractAddress).winner() == _winner) {
+                result[index++] = allAuctions[i];
+            }
+        }
+
+        return result;
     }
 
     function getAuctionsPaginated(uint256 offset, uint256 limit) external view returns (AuctionRecord[] memory) {
