@@ -317,6 +317,60 @@ describe("AuctionFactory", function () {
     expect(ownerAuctions.length).to.equal(0);
   });
 
+  it("getAuctionsByWinner() returns finalized auctions won by the address", async function () {
+    const englishTokenId = 2;
+    const dutchTokenId = 3;
+    await mockERC721.mint(seller.address, englishTokenId);
+    await mockERC721.mint(seller.address, dutchTokenId);
+
+    const englishItem = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: englishTokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+    const dutchItem = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: dutchTokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await mockERC721.connect(seller).approve(await factory.getAddress(), englishTokenId);
+    await factory.connect(seller).createEnglishAuction(englishItem, ethers.parseEther("1"), 3600);
+
+    let auctions = await factory.getAllAuctions();
+    const englishAuction = await ethers.getContractAt("EnglishAuction", auctions[0].contractAddress);
+
+    expect(await factory.getAuctionsByWinner(owner.address)).to.have.lengthOf(0);
+
+    await englishAuction.connect(owner).bid({ value: ethers.parseEther("2") });
+    await ethers.provider.send("evm_increaseTime", [3601]);
+    await ethers.provider.send("evm_mine", []);
+    await englishAuction.finalize();
+
+    await mockERC721.connect(seller).approve(await factory.getAddress(), dutchTokenId);
+    await factory.connect(seller).createDutchAuction(dutchItem, ethers.parseEther("5"), ethers.parseEther("1"), 3600);
+
+    auctions = await factory.getAllAuctions();
+    const dutchAuction = await ethers.getContractAt("DutchAuction", auctions[1].contractAddress);
+    await dutchAuction.connect(seller).buy({ value: ethers.parseEther("5") });
+
+    const ownerWins = await factory.getAuctionsByWinner(owner.address);
+    expect(ownerWins).to.have.lengthOf(1);
+    expect(ownerWins[0].contractAddress).to.equal(await englishAuction.getAddress());
+    expect(ownerWins[0].auctionType).to.equal(0n);
+
+    const sellerWins = await factory.getAuctionsByWinner(seller.address);
+    expect(sellerWins).to.have.lengthOf(1);
+    expect(sellerWins[0].contractAddress).to.equal(await dutchAuction.getAddress());
+    expect(sellerWins[0].auctionType).to.equal(1n);
+  });
+
   it("Pagination returns correct slice", async function () {
     const item = {
       tokenType: 0,
