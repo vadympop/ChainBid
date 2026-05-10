@@ -8,7 +8,6 @@ import {
   ArrowTopRightOnSquareIcon,
   ArrowsRightLeftIcon,
   CheckCircleIcon,
-  ChevronDownIcon,
   DocumentDuplicateIcon,
   EyeIcon,
   QrCodeIcon,
@@ -54,12 +53,16 @@ export const AddressInfoDropdown = ({
   return (
     <>
       <details ref={dropdownRef} className="dropdown dropdown-end leading-3">
-        <summary className="btn btn-secondary btn-sm pl-0 pr-2 shadow-md dropdown-toggle gap-0 h-auto!">
-          <BlockieAvatar address={checkSumAddress} size={30} ensImage={ensAvatar} />
-          <span className="ml-2 mr-1">
-            {isENS(displayName) ? displayName : checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
-          </span>
-          <ChevronDownIcon className="h-6 w-4 ml-2 sm:ml-0" />
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 transition hover:bg-white/10">
+          <div className="text-left">
+            <p className="m-0 text-sm font-semibold leading-tight text-white">
+              {isENS(displayName) ? displayName : checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
+            </p>
+            <p className="m-0 mt-0.5 text-xs leading-tight text-slate-500">
+              {checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
+            </p>
+          </div>
+          <BlockieAvatar address={checkSumAddress} size={32} ensImage={ensAvatar} />
         </summary>
         <ul className="dropdown-content menu z-2 p-2 mt-2 shadow-center shadow-accent bg-base-200 rounded-box gap-1">
           <NetworkOptions hidden={!selectingNetwork} />
