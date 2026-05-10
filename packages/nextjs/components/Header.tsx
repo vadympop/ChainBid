@@ -29,11 +29,6 @@ export const menuLinks: HeaderMenuLink[] = [
     icon: <Squares2X2Icon className="h-5 w-5" />,
   },
   {
-    label: "Create item",
-    href: "/create-item",
-    icon: <CubeIcon className="h-5 w-5" />,
-  },
-  {
     label: "Create auction",
     href: "/create-auction",
     icon: <PlusCircleIcon className="h-5 w-5" />,
@@ -51,7 +46,6 @@ export const menuLinks: HeaderMenuLink[] = [
 ];
 
 const getPageTitle = (pathname: string) => {
-  if (pathname.startsWith("/create-item")) return "Create item NFT";
   if (pathname.startsWith("/create-auction")) return "Create auction";
   if (pathname.startsWith("/auction/")) return "Auction";
   if (pathname.startsWith("/portfolio")) return "Portfolio";
@@ -60,7 +54,6 @@ const getPageTitle = (pathname: string) => {
 };
 
 const getPageSubtitle = (pathname: string) => {
-  if (pathname.startsWith("/create-item")) return "Pin metadata and mint a ChainBid item certificate.";
   if (pathname.startsWith("/create-auction"))
     return "List an NFT or consign a physical item — we wrap it as a certificate.";
   if (pathname.startsWith("/auction/")) return "Bid, buy, finalize, withdraw, or confirm physical delivery.";
