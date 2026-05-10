@@ -44,17 +44,13 @@ export const RainbowKitCustomConnectButton = () => {
 
               return (
                 <>
-                  <div className="flex flex-col items-center mr-2">
+                  <div className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 sm:flex">
                     <Balance
                       address={account.address as Address}
-                      style={{
-                        minHeight: "0",
-                        height: "auto",
-                        fontSize: "0.8em",
-                      }}
+                      style={{ minHeight: "0", height: "auto", fontSize: "0.8rem", color: "white" }}
                     />
-                    <span className="text-xs" style={{ color: networkColor }}>
-                      {chain.name}
+                    <span className="text-xs font-medium" style={{ color: networkColor }}>
+                      · {chain.name}
                     </span>
                   </div>
                   <AddressInfoDropdown

@@ -10,56 +10,11 @@ import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaff
 import type { AuctionRecord } from "~~/types/chainbid";
 
 type TypeFilter = "All" | "English" | "Dutch" | "Vickrey";
-type AssetFilter = "All" | "Digital" | "Physical";
-type StatusFilter = "All" | "Active" | "Commit" | "Reveal" | "Ended" | "Finalized" | "Awaiting confirmation";
-
 const typeFilters: TypeFilter[] = ["All", "English", "Dutch", "Vickrey"];
-const assetFilters: AssetFilter[] = ["All", "Digital", "Physical"];
-const statusFilters: StatusFilter[] = [
-  "All",
-  "Active",
-  "Commit",
-  "Reveal",
-  "Ended",
-  "Finalized",
-  "Awaiting confirmation",
-];
-
-const FilterGroup = <T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: T[];
-  value: T;
-  onChange: (value: T) => void;
-}) => (
-  <div>
-    <p className="m-0 mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-    <div className="flex flex-wrap gap-2">
-      {options.map(option => (
-        <button
-          key={option}
-          className={`btn btn-sm rounded-lg border-white/10 ${
-            value === option ? "btn-primary bg-blue-600 text-white" : "bg-white/[0.04] text-slate-300"
-          }`}
-          onClick={() => onChange(option)}
-          type="button"
-        >
-          {option}
-        </button>
-      ))}
-    </div>
-  </div>
-);
 
 const Home: NextPage = () => {
   const { isConnected } = useAccount();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
-  const [assetFilter, setAssetFilter] = useState<AssetFilter>("All");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const now = useAuctionNow();
   const { data: factoryInfo } = useDeployedContractInfo({ contractName: "AuctionFactory" });
   const { data: auctions, isLoading } = useScaffoldReadContract({
@@ -74,54 +29,36 @@ const Home: NextPage = () => {
   }, [auctions]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-      <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <p className="m-0 text-sm font-semibold uppercase tracking-wide text-blue-200">ChainBid marketplace</p>
-          <h2 className="m-0 mt-3 text-2xl font-semibold text-white sm:text-3xl">
-            NFT-backed auctions, without guesswork
-          </h2>
-          <p className="m-0 mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-            Browse factory-created English, Dutch, and Vickrey auction clones. Physical listings use an NFT claim
-            certificate; delivery remains off-chain and buyer confirmation releases payment when supported by the
-            contract.
-          </p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <p className="m-0 text-sm text-slate-500">Factory</p>
-          <p className="m-0 mt-2 break-all text-sm font-semibold text-white">
-            {factoryInfo?.address || "Not deployed"}
-          </p>
-          <div className="mt-4 flex gap-2">
-            <Link href="/create-item" className="btn btn-sm rounded-lg bg-blue-600 text-white">
-              Create item
-            </Link>
-            <Link
-              href="/create-auction"
-              className="btn btn-sm rounded-lg border-white/10 bg-white/[0.06] text-slate-200"
+    <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
+      {/* Filter bar */}
+      <section className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-[#0a1224] px-4 py-3">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Format</span>
+        <div className="flex flex-wrap gap-2">
+          {typeFilters.map(option => (
+            <button
+              key={option}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                typeFilter === option
+                  ? "bg-blue-600 text-white"
+                  : "bg-white/[0.05] text-slate-400 hover:bg-white/10 hover:text-white"
+              }`}
+              onClick={() => setTypeFilter(option)}
+              type="button"
             >
-              List NFT
-            </Link>
-          </div>
+              {option}
+            </button>
+          ))}
         </div>
       </section>
 
       {!isConnected && (
-        <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+        <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
           Connect your wallet to create auctions and use bid/buy actions. Browsing remains available.
         </div>
       )}
 
-      <section className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <FilterGroup label="Auction type" options={typeFilters} value={typeFilter} onChange={setTypeFilter} />
-          <FilterGroup label="Asset type" options={assetFilters} value={assetFilter} onChange={setAssetFilter} />
-          <FilterGroup label="Status" options={statusFilters} value={statusFilter} onChange={setStatusFilter} />
-        </div>
-      </section>
-
       {!factoryInfo?.address && (
-        <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.03] p-8 text-center">
+        <div className="rounded-xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
           <h3 className="m-0 text-lg font-semibold text-white">AuctionFactory is not deployed</h3>
           <p className="m-0 mt-2 text-sm text-slate-400">
             Run `yarn deploy` against your selected network to populate deployedContracts.ts.
@@ -132,17 +69,20 @@ const Home: NextPage = () => {
       {factoryInfo?.address && isLoading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map(index => (
-            <div key={index} className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
-              <div className="skeleton h-44 w-full rounded-lg bg-white/10" />
-              <div className="mt-4 h-5 w-2/3 rounded bg-white/10" />
-              <div className="mt-2 h-4 w-full rounded bg-white/10" />
+            <div key={index} className="overflow-hidden rounded-xl border border-white/10 bg-[#0a1224]">
+              <div className="skeleton aspect-[4/3] w-full bg-white/10" />
+              <div className="space-y-3 p-4">
+                <div className="h-4 w-1/3 rounded bg-white/10" />
+                <div className="h-5 w-2/3 rounded bg-white/10" />
+                <div className="h-4 w-full rounded bg-white/10" />
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {factoryInfo?.address && !isLoading && records.length === 0 && (
-        <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.03] p-8 text-center">
+        <div className="rounded-xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
           <h3 className="m-0 text-lg font-semibold text-white">No auctions yet</h3>
           <p className="m-0 mt-2 text-sm text-slate-400">
             Mint a platform item or list an existing NFT to create the first auction.
@@ -154,14 +94,14 @@ const Home: NextPage = () => {
       )}
 
       {records.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           {records.map(record => (
             <AuctionCard
               key={record.contractAddress}
-              assetFilter={assetFilter}
+              assetFilter="All"
               now={now}
               record={record}
-              statusFilter={statusFilter}
+              statusFilter="All"
               typeFilter={typeFilter}
             />
           ))}
