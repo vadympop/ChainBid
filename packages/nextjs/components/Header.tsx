@@ -38,18 +38,12 @@ export const menuLinks: HeaderMenuLink[] = [
     href: "/portfolio",
     icon: <RectangleStackIcon className="h-5 w-5" />,
   },
-  {
-    label: "Debug",
-    href: "/debug",
-    icon: <ChartBarIcon className="h-5 w-5" />,
-  },
 ];
 
 const getPageTitle = (pathname: string) => {
   if (pathname.startsWith("/create-auction")) return "Create auction";
   if (pathname.startsWith("/auction/")) return "Auction";
   if (pathname.startsWith("/portfolio")) return "Portfolio";
-  if (pathname.startsWith("/debug")) return "Debug contracts";
   return "Marketplace";
 };
 
