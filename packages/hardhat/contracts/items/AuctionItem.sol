@@ -14,7 +14,7 @@ enum AssetType {
 enum AuctionType {
     English,
     Dutch,
-    SealedBid
+    Vickrey
 }
 enum AuctionState {
     Active,

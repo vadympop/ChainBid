@@ -6,8 +6,14 @@ import Link from "next/link";
 import { useReadContract } from "wagmi";
 import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
 import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chainbid";
-import type { AuctionRecord, ChainBidMetadata, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
-import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
+import type {
+  AuctionRecord,
+  ChainBidMetadata,
+  DutchAuctionInfo,
+  EnglishAuctionInfo,
+  VickreyAuctionInfo,
+} from "~~/types/chainbid";
+import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi, vickreyAuctionAbi } from "~~/utils/chainbid/abis";
 import {
   AUCTION_REFRESH_INTERVAL_MS,
   formatEth,
@@ -15,30 +21,43 @@ import {
   getDutchPrice,
   getEnglishPrice,
   getTimeLeft,
+  getVickreyAuctionStatus,
+  getVickreyPhaseEndTime,
+  getVickreyPrice,
   normalizeAuctionItem,
 } from "~~/utils/chainbid/auction";
 import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
 
 type AuctionCardProps = {
   record: AuctionRecord;
-  typeFilter: "All" | "English" | "Dutch";
+  typeFilter: "All" | "English" | "Dutch" | "Vickrey";
   assetFilter: "All" | "Digital" | "Physical";
-  statusFilter: "All" | "Active" | "Ended" | "Finalized" | "Awaiting confirmation";
+  statusFilter: "All" | "Active" | "Commit" | "Reveal" | "Ended" | "Finalized" | "Awaiting confirmation";
   now: bigint;
 };
 
 const matchesStatusFilter = (status: AuctionStatus, filter: AuctionCardProps["statusFilter"]) => {
   if (filter === "All") return true;
-  if (filter === "Active") return status === "active";
+  if (filter === "Active") return status === "active" || status === "commit" || status === "reveal";
+  if (filter === "Commit") return status === "commit";
+  if (filter === "Reveal") return status === "reveal";
   if (filter === "Ended") return status === "ended";
   if (filter === "Finalized") return status === "finalized";
   return status === "awaiting-confirmation";
+};
+
+const getRecordTypeLabel = (auctionType: AuctionType) => {
+  if (auctionType === AuctionType.English) return "English";
+  if (auctionType === AuctionType.Dutch) return "Dutch";
+  return "Vickrey";
 };
 
 export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now }: AuctionCardProps) => {
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const isEnglish = Number(record.auctionType) === AuctionType.English;
   const isDutch = Number(record.auctionType) === AuctionType.Dutch;
+  const isVickrey = Number(record.auctionType) === AuctionType.Vickrey;
+  const recordTypeLabel = getRecordTypeLabel(Number(record.auctionType) as AuctionType);
 
   const { data: englishInfo, isLoading: isEnglishLoading } = useReadContract({
     address: record.contractAddress,
@@ -73,8 +92,23 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
       refetchOnWindowFocus: true,
     },
   });
+  const { data: vickreyInfo, isLoading: isVickreyLoading } = useReadContract({
+    address: record.contractAddress,
+    abi: vickreyAuctionAbi,
+    functionName: "getAuctionInfo",
+    query: {
+      enabled: isVickrey,
+      refetchInterval: AUCTION_REFRESH_INTERVAL_MS,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
+  });
 
-  const info = (isEnglish ? englishInfo : dutchInfo) as EnglishAuctionInfo | DutchAuctionInfo | undefined;
+  const info = (isEnglish ? englishInfo : isDutch ? dutchInfo : vickreyInfo) as
+    | EnglishAuctionInfo
+    | DutchAuctionInfo
+    | VickreyAuctionInfo
+    | undefined;
   const item = useMemo(() => (info ? normalizeAuctionItem(info.item) : undefined), [info]);
 
   const { data: erc721TokenUri } = useReadContract({
@@ -107,7 +141,7 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
     };
   }, [item, tokenUri]);
 
-  if (typeFilter !== "All" && typeFilter !== (isEnglish ? "English" : "Dutch")) return null;
+  if (typeFilter !== "All" && typeFilter !== recordTypeLabel) return null;
   if (!info || !item) {
     return (
       <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
@@ -118,20 +152,37 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
     );
   }
 
-  const status = getAuctionStatus(
-    info.endTime,
-    info.finalized,
-    item.assetType,
-    info.winner,
-    info.receivedConfirmed,
-    now,
-  );
+  const status = isVickrey
+    ? getVickreyAuctionStatus(
+        (info as VickreyAuctionInfo).commitEndTime,
+        (info as VickreyAuctionInfo).revealEndTime,
+        info.finalized,
+        item.assetType,
+        info.winner,
+        info.receivedConfirmed,
+        now,
+      )
+    : getAuctionStatus(
+        (info as EnglishAuctionInfo | DutchAuctionInfo).endTime,
+        info.finalized,
+        item.assetType,
+        info.winner,
+        info.receivedConfirmed,
+        now,
+      );
   const price = isEnglish
     ? getEnglishPrice(info as EnglishAuctionInfo)
-    : (info as DutchAuctionInfo).finalized
+    : isDutch && (info as DutchAuctionInfo).finalized
       ? getDutchPrice(info as DutchAuctionInfo)
-      : (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo));
+      : isDutch
+        ? (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo))
+        : getVickreyPrice(info as VickreyAuctionInfo);
   const assetLabel = item.assetType === AssetType.Digital ? "Digital" : "Physical";
+  const timeTarget = isVickrey
+    ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
+    : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
+  const priceLabel = isEnglish ? "Current bid" : isDutch ? "Current price" : info.finalized ? "Final price" : "Reserve";
+  const timeLabel = isVickrey && (status === "commit" || status === "reveal") ? `${status} ends` : "Time left";
 
   if (assetFilter !== "All" && assetFilter !== assetLabel) return null;
   if (!matchesStatusFilter(status, statusFilter)) return null;
@@ -146,13 +197,13 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
           <img src={metadata.image} alt={metadata.name} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-slate-600">
-            {isEnglishLoading || isDutchLoading ? "Loading auction..." : "Metadata pending"}
+            {isEnglishLoading || isDutchLoading || isVickreyLoading ? "Loading auction..." : "Metadata pending"}
           </div>
         )}
       </div>
       <div className="space-y-4 p-4">
         <div className="flex flex-wrap gap-2">
-          <AuctionStatusBadge kind="auction" auctionType={isEnglish ? AuctionType.English : AuctionType.Dutch} />
+          <AuctionStatusBadge kind="auction" auctionType={Number(record.auctionType) as AuctionType} />
           <AuctionStatusBadge kind="asset" assetType={item.assetType} />
           <AuctionStatusBadge kind="status" status={status} />
         </div>
@@ -166,12 +217,12 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="m-0 text-xs text-slate-500">{isEnglish ? "Current bid" : "Current price"}</p>
+            <p className="m-0 text-xs text-slate-500">{priceLabel}</p>
             <p className="m-0 font-semibold text-white">{formatEth(price)}</p>
           </div>
           <div>
-            <p className="m-0 text-xs text-slate-500">Time left</p>
-            <p className="m-0 font-semibold text-white">{getTimeLeft(info.endTime, now)}</p>
+            <p className="m-0 text-xs text-slate-500">{timeLabel}</p>
+            <p className="m-0 font-semibold text-white">{getTimeLeft(timeTarget, now)}</p>
           </div>
         </div>
       </div>

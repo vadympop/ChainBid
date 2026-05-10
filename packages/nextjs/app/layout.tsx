@@ -7,7 +7,7 @@ import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
 export const metadata = getMetadata({
   title: "ChainBid",
-  description: "NFT-backed English and Dutch auctions.",
+  description: "NFT-backed English, Dutch, and Vickrey auctions.",
 });
 
 const ScaffoldEthApp = ({ children }: { children: React.ReactNode }) => {

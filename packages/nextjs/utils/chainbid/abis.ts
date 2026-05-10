@@ -207,3 +207,72 @@ export const dutchAuctionAbi = [
     ],
   },
 ] as const;
+
+export const vickreyAuctionAbi = [
+  ...baseAuctionAbi,
+  {
+    type: "function",
+    name: "blocked",
+    stateMutability: "view",
+    inputs: [{ name: "bidder", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "commit",
+    stateMutability: "payable",
+    inputs: [{ name: "commitment", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "commitments",
+    stateMutability: "view",
+    inputs: [{ name: "bidder", type: "address" }],
+    outputs: [
+      { name: "commitment", type: "bytes32" },
+      { name: "deposit", type: "uint256" },
+      { name: "revealed", type: "bool" },
+      { name: "valid", type: "bool" },
+      { name: "bidAmount", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
+    name: "reveal",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "bidAmount", type: "uint256" },
+      { name: "secret", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "getAuctionInfo",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "item", type: "tuple", components: auctionItemComponents },
+          { name: "seller", type: "address" },
+          { name: "commitEndTime", type: "uint256" },
+          { name: "revealEndTime", type: "uint256" },
+          { name: "finalized", type: "bool" },
+          { name: "reservePrice", type: "uint256" },
+          { name: "highestBidder", type: "address" },
+          { name: "highestBid", type: "uint256" },
+          { name: "secondHighestBid", type: "uint256" },
+          { name: "validBidCount", type: "uint256" },
+          { name: "totalCommitments", type: "uint256" },
+          { name: "winner", type: "address" },
+          { name: "finalPrice", type: "uint256" },
+          { name: "receivedConfirmed", type: "bool" },
+        ],
+      },
+    ],
+  },
+] as const;

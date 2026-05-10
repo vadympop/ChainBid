@@ -64,7 +64,7 @@ const getPageSubtitle = (pathname: string) => {
   if (pathname.startsWith("/create-auction")) return "Approve the factory and list an NFT-backed auction.";
   if (pathname.startsWith("/auction/")) return "Bid, buy, finalize, withdraw, or confirm physical delivery.";
   if (pathname.startsWith("/portfolio")) return "Track your created auctions and platform item NFTs.";
-  return "Live English and Dutch auctions backed by NFTs.";
+  return "Live English, Dutch, and Vickrey auctions backed by NFTs.";
 };
 
 const HeaderMenuLinks = ({ onNavigate }: { onNavigate?: () => void }) => {

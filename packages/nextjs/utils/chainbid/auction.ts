@@ -1,7 +1,7 @@
 import { formatEther, isAddress, zeroAddress } from "viem";
 import type { Address } from "viem";
 import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chainbid";
-import type { AuctionItem, DutchAuctionInfo, EnglishAuctionInfo } from "~~/types/chainbid";
+import type { AuctionItem, DutchAuctionInfo, EnglishAuctionInfo, VickreyAuctionInfo } from "~~/types/chainbid";
 
 export const MIN_AUCTION_DURATION_SECONDS = 10 * 60;
 export const AUCTION_CLOCK_INTERVAL_MS = 1_000;
@@ -20,7 +20,7 @@ export const ASSET_TYPE_LABELS: Record<AssetType, "Digital" | "Physical"> = {
 export const AUCTION_TYPE_LABELS: Record<AuctionType, string> = {
   [AuctionType.English]: "English",
   [AuctionType.Dutch]: "Dutch",
-  [AuctionType.SealedBid]: "Sealed bid",
+  [AuctionType.Vickrey]: "Vickrey",
 };
 
 export const isZeroAddress = (value?: string) => !value || value.toLowerCase() === zeroAddress;
@@ -71,6 +71,24 @@ export const getAuctionStatus = (
   return now >= endTime ? "ended" : "active";
 };
 
+export const getVickreyAuctionStatus = (
+  commitEndTime: bigint,
+  revealEndTime: bigint,
+  finalized: boolean,
+  assetType: AssetType,
+  winner: Address,
+  receivedConfirmed: boolean,
+  now: bigint = getUnixTime(),
+): AuctionStatus => {
+  if (finalized && assetType === AssetType.Physical && !isZeroAddress(winner) && !receivedConfirmed) {
+    return "awaiting-confirmation";
+  }
+  if (finalized) return "finalized";
+  if (now < commitEndTime) return "commit";
+  if (now < revealEndTime) return "reveal";
+  return "ended";
+};
+
 export const getTimeLeft = (endTime?: bigint, now: bigint = getUnixTime()) => {
   if (!endTime) return "Unknown";
 
@@ -103,6 +121,18 @@ export const getEnglishPrice = (info?: EnglishAuctionInfo) => {
 export const getDutchPrice = (info?: DutchAuctionInfo) => {
   if (!info) return 0n;
   return info.currentPrice > 0n ? info.currentPrice : info.reservePrice;
+};
+
+export const getVickreyPrice = (info?: VickreyAuctionInfo) => {
+  if (!info) return 0n;
+  return info.finalPrice > 0n ? info.finalPrice : info.reservePrice;
+};
+
+export const getVickreyPhaseEndTime = (info?: VickreyAuctionInfo, now: bigint = getUnixTime()) => {
+  if (!info) return undefined;
+  if (info.finalized) return info.revealEndTime;
+  if (now < info.commitEndTime) return info.commitEndTime;
+  return info.revealEndTime;
 };
 
 export const validateTokenAddress = (value: string): value is Address => isAddress(value);

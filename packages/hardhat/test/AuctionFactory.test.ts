@@ -67,6 +67,25 @@ describe("AuctionFactory", function () {
     expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
   });
 
+  it("createVickreyAuction() deploys valid contract and escrows approved NFT", async function () {
+    const item = {
+      tokenType: 0, // ERC721
+      assetType: 0, // Digital
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await factory.connect(seller).createVickreyAuction(item, ethers.parseEther("1"), 600, 600);
+
+    const auctions = await factory.getAllAuctions();
+    expect(auctions.length).to.equal(1);
+    expect(auctions[0].auctionType).to.equal(2n); // Vickrey
+    expect(auctions[0].seller).to.equal(seller.address);
+    expect(await mockERC721.ownerOf(tokenId)).to.equal(auctions[0].contractAddress);
+  });
+
   it("createEnglishAuction() reverts without NFT approval", async function () {
     const unapprovedTokenId = 2;
     await mockERC721.mint(seller.address, unapprovedTokenId);
@@ -198,6 +217,24 @@ describe("AuctionFactory", function () {
 
     await expect(
       factory.connect(seller).createDutchAuction(item, ethers.parseEther("10"), ethers.parseEther("2"), 599),
+    ).to.be.revertedWith("Duration must be at least 10 minutes");
+  });
+
+  it("createVickreyAuction() reverts when commit or reveal duration is below 10 minutes", async function () {
+    const item = {
+      tokenType: 0,
+      assetType: 0,
+      tokenContract: await mockERC721.getAddress(),
+      tokenId: tokenId,
+      amount: 1,
+      metadataURI: "",
+    };
+
+    await expect(
+      factory.connect(seller).createVickreyAuction(item, ethers.parseEther("1"), 599, 600),
+    ).to.be.revertedWith("Duration must be at least 10 minutes");
+    await expect(
+      factory.connect(seller).createVickreyAuction(item, ethers.parseEther("1"), 600, 599),
     ).to.be.revertedWith("Duration must be at least 10 minutes");
   });
 

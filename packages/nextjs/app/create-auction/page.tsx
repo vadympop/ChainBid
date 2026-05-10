@@ -33,6 +33,8 @@ const initialForm: CreateAuctionForm = {
   reservePrice: "",
   startPrice: "",
   durationHours: "1",
+  commitDurationHours: "1",
+  revealDurationHours: "1",
 };
 
 const validateForm = (form: CreateAuctionForm, address?: string, factoryAddress?: string) => {
@@ -49,7 +51,19 @@ const validateForm = (form: CreateAuctionForm, address?: string, factoryAddress?
     if (Number(form.startPrice) < Number(form.reservePrice))
       return "Dutch start price must be at least the reserve price.";
   }
-  if (secondsFromHours(form.durationHours) < BigInt(MIN_AUCTION_DURATION_SECONDS)) {
+  if (
+    form.auctionType === "Vickrey" &&
+    secondsFromHours(form.commitDurationHours) < BigInt(MIN_AUCTION_DURATION_SECONDS)
+  ) {
+    return "Commit duration must be at least 10 minutes.";
+  }
+  if (
+    form.auctionType === "Vickrey" &&
+    secondsFromHours(form.revealDurationHours) < BigInt(MIN_AUCTION_DURATION_SECONDS)
+  ) {
+    return "Reveal duration must be at least 10 minutes.";
+  }
+  if (form.auctionType !== "Vickrey" && secondsFromHours(form.durationHours) < BigInt(MIN_AUCTION_DURATION_SECONDS)) {
     return "Duration must be at least 10 minutes.";
   }
   return "";
@@ -213,10 +227,20 @@ const CreateAuctionPage: NextPage = () => {
           functionName: "createEnglishAuction",
           args: [item, reservePrice, duration],
         });
-      } else {
+      } else if (form.auctionType === "Dutch") {
         await writeFactoryAsync({
           functionName: "createDutchAuction",
           args: [item, parseEther(form.startPrice), reservePrice, duration],
+        });
+      } else {
+        await writeFactoryAsync({
+          functionName: "createVickreyAuction",
+          args: [
+            item,
+            reservePrice,
+            secondsFromHours(form.commitDurationHours),
+            secondsFromHours(form.revealDurationHours),
+          ],
         });
       }
 
@@ -255,6 +279,7 @@ const CreateAuctionPage: NextPage = () => {
               >
                 <option>English</option>
                 <option>Dutch</option>
+                <option>Vickrey</option>
               </select>
             </label>
             <label className="form-control">
@@ -360,25 +385,68 @@ const CreateAuctionPage: NextPage = () => {
               onChange={value => updateForm("reservePrice", value)}
               value={form.reservePrice}
             />
-            <label className="form-control">
-              <span className="label-text text-slate-300">Duration</span>
-              <div className="join w-full">
-                <input
-                  className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
-                  disabled={isPending}
-                  inputMode="decimal"
-                  min="0.17"
-                  onChange={event => updateForm("durationHours", event.target.value)}
-                  step="any"
-                  type="number"
-                  value={form.durationHours}
-                />
-                <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
-                  hours
-                </span>
-              </div>
-            </label>
+            {form.auctionType !== "Vickrey" && (
+              <label className="form-control">
+                <span className="label-text text-slate-300">Duration</span>
+                <div className="join w-full">
+                  <input
+                    className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                    disabled={isPending}
+                    inputMode="decimal"
+                    min="0.17"
+                    onChange={event => updateForm("durationHours", event.target.value)}
+                    step="any"
+                    type="number"
+                    value={form.durationHours}
+                  />
+                  <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
+                    hours
+                  </span>
+                </div>
+              </label>
+            )}
           </div>
+
+          {form.auctionType === "Vickrey" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="form-control">
+                <span className="label-text text-slate-300">Commit duration</span>
+                <div className="join w-full">
+                  <input
+                    className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                    disabled={isPending}
+                    inputMode="decimal"
+                    min="0.17"
+                    onChange={event => updateForm("commitDurationHours", event.target.value)}
+                    step="any"
+                    type="number"
+                    value={form.commitDurationHours}
+                  />
+                  <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
+                    hours
+                  </span>
+                </div>
+              </label>
+              <label className="form-control">
+                <span className="label-text text-slate-300">Reveal duration</span>
+                <div className="join w-full">
+                  <input
+                    className={`input join-item input-bordered w-full border-white/10 bg-slate-950/70 text-white ${chainBidFieldClass}`}
+                    disabled={isPending}
+                    inputMode="decimal"
+                    min="0.17"
+                    onChange={event => updateForm("revealDurationHours", event.target.value)}
+                    step="any"
+                    type="number"
+                    value={form.revealDurationHours}
+                  />
+                  <span className="join-item flex items-center border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-300">
+                    hours
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
 
           {form.auctionType === "Dutch" && (
             <PriceInput
