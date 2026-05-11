@@ -298,7 +298,7 @@ Another limitation is the physical item delivery flow. For physical auctions, th
 
 ## AI Usage
 
-AI tools were used as assistance during development, mainly for frontend implementation and writing smart contract tests. The generated suggestions were reviewed, adapted, and integrated manually.
+Codex and Claude Code were used as assistance during development, mainly for frontend implementation and writing smart contract tests. The generated suggestions were reviewed, adapted, and integrated manually.
 
 ## What We Learned
 
