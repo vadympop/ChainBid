@@ -892,11 +892,18 @@ const CreateAuctionPage: NextPage = () => {
             <SummaryRow label="Type" value={form.assetType === "Physical" ? "Physical item" : "On-chain NFT"} />
             <SummaryRow label="Format" value={formatLabel} />
             {form.auctionType !== "Vickrey" ? (
-              <SummaryRow label="Duration" value={`${form.durationHours}h`} />
+              <SummaryRow
+                label="Duration"
+                value={
+                  Number(form.durationHours) < 1
+                    ? `${Math.round(Number(form.durationHours) * 60)}m`
+                    : `${form.durationHours}h`
+                }
+              />
             ) : (
               <SummaryRow
                 label="Commit / Reveal"
-                value={`${form.commitDurationHours}h / ${form.revealDurationHours}h`}
+                value={`${Number(form.commitDurationHours) < 1 ? `${Math.round(Number(form.commitDurationHours) * 60)}m` : `${form.commitDurationHours}h`} / ${Number(form.revealDurationHours) < 1 ? `${Math.round(Number(form.revealDurationHours) * 60)}m` : `${form.revealDurationHours}h`}`}
               />
             )}
             {form.assetType === "Digital" && <SummaryRow label="Token standard" value={form.tokenType} />}
