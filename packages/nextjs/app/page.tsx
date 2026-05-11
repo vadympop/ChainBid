@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { NextPage } from "next";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
+import { AlertBox } from "~~/components/chainbid/AlertBox";
 import { AuctionCard } from "~~/components/chainbid/AuctionCard";
 import type { AuctionCardResolvedData } from "~~/components/chainbid/AuctionCard";
 import { StyledSelect } from "~~/components/chainbid/StyledSelect";
@@ -230,9 +231,9 @@ const Home: NextPage = () => {
       </section>
 
       {!isConnected && (
-        <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+        <AlertBox variant="info" className="rounded-2xl px-4 py-3">
           Connect your wallet to create auctions and use bid/buy actions. Browsing remains available.
-        </div>
+        </AlertBox>
       )}
 
       {!factoryInfo?.address && (

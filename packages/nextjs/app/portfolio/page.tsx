@@ -6,16 +6,18 @@ import type { NextPage } from "next";
 import { zeroAddress } from "viem";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
+import { AlertBox } from "~~/components/chainbid/AlertBox";
+import { StatCard } from "~~/components/chainbid/StatCard";
 import { useScaffoldEventHistory, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AuctionRecord, AuctionType } from "~~/types/chainbid";
-import { compactAddress } from "~~/utils/chainbid/auction";
+import { AUCTION_TYPE_LABELS, compactAddress } from "~~/utils/chainbid/auction";
 
 type Tab = "listed" | "won" | "minted";
 
-const typeStyle = (type: AuctionType) => {
-  if (type === AuctionType.English) return { label: "English", bg: "bg-blue-500/20", text: "text-blue-300" };
-  if (type === AuctionType.Dutch) return { label: "Dutch", bg: "bg-orange-500/20", text: "text-orange-300" };
-  return { label: "Vickrey", bg: "bg-violet-500/20", text: "text-violet-300" };
+const TYPE_BADGE_STYLE: Record<AuctionType, { bg: string; text: string }> = {
+  [AuctionType.English]: { bg: "bg-blue-500/20", text: "text-blue-300" },
+  [AuctionType.Dutch]: { bg: "bg-orange-500/20", text: "text-orange-300" },
+  [AuctionType.Vickrey]: { bg: "bg-violet-500/20", text: "text-violet-300" },
 };
 
 const PortfolioPage: NextPage = () => {
@@ -61,34 +63,79 @@ const PortfolioPage: NextPage = () => {
     ["minted", "Minted NFTs"],
   ];
 
+  const AuctionTable = ({ records }: { records: AuctionRecord[] }) => (
+    <div className="overflow-hidden rounded-xl border border-white/10">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-white/10 bg-white/[0.03]">
+            {["Lot", "Format", "Action"].map((h, i) => (
+              <th
+                key={h}
+                className={`px-4 py-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500 ${i === 2 ? "text-right" : "text-left"}`}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((record, i) => {
+            const auctionType = Number(record.auctionType) as AuctionType;
+            const { bg, text } = TYPE_BADGE_STYLE[auctionType];
+            const label = AUCTION_TYPE_LABELS[auctionType];
+            return (
+              <tr
+                key={record.contractAddress}
+                className={`border-b border-white/5 last:border-0 ${i % 2 === 1 ? "bg-white/[0.015]" : ""}`}
+              >
+                <td className="px-4 py-3 font-mono text-xs text-slate-300">{compactAddress(record.contractAddress)}</td>
+                <td className="px-4 py-3">
+                  <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bg} ${text}`}>
+                    {label}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Link
+                    href={`/auction/${record.contractAddress}`}
+                    className="text-xs font-semibold text-blue-400 hover:text-blue-300"
+                  >
+                    View →
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       {!address && (
-        <div className="rounded-lg border border-blue-400/20 bg-blue-500/10 p-5 text-sm text-blue-100">
+        <AlertBox variant="info" className="rounded-lg p-5">
           Connect your wallet to view portfolio data.
-        </div>
+        </AlertBox>
       )}
 
       {/* Stats */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Listed</p>
-          <p className="m-0 mt-2 text-4xl font-bold text-blue-400">{listedAuctions.length}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Total on platform</p>
-          <p className="m-0 mt-2 text-4xl font-bold text-emerald-400">{allAuctionRecords.length}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">NFTs minted</p>
-          <p className="m-0 mt-2 text-4xl font-bold text-amber-400">{mintedTokenIds.length}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
-          <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Wallet</p>
-          <p className="m-0 mt-3 break-all font-mono text-xs font-semibold text-slate-300">
-            {address ? compactAddress(address) : "—"}
-          </p>
-        </div>
+        <StatCard label="Listed" value={listedAuctions.length} valueClassName="mt-2 text-4xl font-bold text-blue-400" />
+        <StatCard
+          label="Total on platform"
+          value={allAuctionRecords.length}
+          valueClassName="mt-2 text-4xl font-bold text-emerald-400"
+        />
+        <StatCard
+          label="NFTs minted"
+          value={mintedTokenIds.length}
+          valueClassName="mt-2 text-4xl font-bold text-amber-400"
+        />
+        <StatCard
+          label="Wallet"
+          value={address ? compactAddress(address) : "—"}
+          valueClassName="mt-3 break-all font-mono text-xs font-semibold text-slate-300"
+        />
       </section>
 
       {/* Tab bar */}
@@ -109,121 +156,26 @@ const PortfolioPage: NextPage = () => {
         </div>
       </div>
 
-      {/* Listed */}
       {tab === "listed" && (
         <section>
           {listedAuctions.length === 0 ? (
             <p className="text-sm text-slate-500">No auctions listed from this wallet yet.</p>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-white/10">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.03]">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Lot
-                    </th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Format
-                    </th>
-                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {listedAuctions.map((record, i) => {
-                    const { label, bg, text } = typeStyle(Number(record.auctionType) as AuctionType);
-                    return (
-                      <tr
-                        key={record.contractAddress}
-                        className={`border-b border-white/5 last:border-0 ${i % 2 === 1 ? "bg-white/[0.015]" : ""}`}
-                      >
-                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                          {compactAddress(record.contractAddress)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bg} ${text}`}
-                          >
-                            {label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/auction/${record.contractAddress}`}
-                            className="text-xs font-semibold text-blue-400 hover:text-blue-300"
-                          >
-                            View →
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <AuctionTable records={listedAuctions} />
           )}
         </section>
       )}
 
-      {/* Won */}
       {tab === "won" && (
         <section>
           {wonAuctionRecords.length === 0 ? (
             <p className="text-sm text-slate-500">No won auctions found for this wallet.</p>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-white/10">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.03]">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Lot
-                    </th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Format
-                    </th>
-                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wonAuctionRecords.map((record, i) => {
-                    const { label, bg, text } = typeStyle(Number(record.auctionType) as AuctionType);
-                    return (
-                      <tr
-                        key={record.contractAddress}
-                        className={`border-b border-white/5 last:border-0 ${i % 2 === 1 ? "bg-white/[0.015]" : ""}`}
-                      >
-                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                          {compactAddress(record.contractAddress)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bg} ${text}`}
-                          >
-                            {label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Link
-                            href={`/auction/${record.contractAddress}`}
-                            className="text-xs font-semibold text-blue-400 hover:text-blue-300"
-                          >
-                            View →
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <AuctionTable records={wonAuctionRecords} />
           )}
         </section>
       )}
 
-      {/* Minted */}
       {tab === "minted" && (
         <section>
           {mintedTokenIds.length === 0 ? (

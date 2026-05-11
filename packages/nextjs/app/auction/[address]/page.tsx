@@ -7,15 +7,18 @@ import { useParams } from "next/navigation";
 import type { NextPage } from "next";
 import { type Address, encodeAbiParameters, isAddress, keccak256, parseEther, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
+import { AlertBox } from "~~/components/chainbid/AlertBox";
 import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
+import { DataGrid } from "~~/components/chainbid/DataGrid";
+import { FormFieldLabel } from "~~/components/chainbid/FormFieldLabel";
+import { ImageThumbnailGrid } from "~~/components/chainbid/ImageThumbnailGrid";
 import { TxButton } from "~~/components/chainbid/TxButton";
 import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
-import { useChainBidWriteContract } from "~~/hooks/chainbid";
+import { useChainBidMetadata, useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AssetType, AuctionType, TokenType } from "~~/types/chainbid";
 import type {
   AuctionRecord,
-  ChainBidMetadata,
   DutchAuctionInfo,
   EnglishAuctionInfo,
   VickreyAuctionInfo,
@@ -37,13 +40,10 @@ import {
   isZeroAddress,
   normalizeAuctionItem,
 } from "~~/utils/chainbid/auction";
-import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
+import { fieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
 
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
-
-const FIELD =
-  "w-full rounded-lg border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
 
 const isBytes32Hex = (value: string): value is `0x${string}` => /^0x[0-9a-fA-F]{64}$/.test(value);
 
@@ -92,8 +92,6 @@ const AuctionDetailPage: NextPage = () => {
   const [commitDeposit, setCommitDeposit] = useState("");
   const [revealBidAmount, setRevealBidAmount] = useState("");
   const [vickreySecret, setVickreySecret] = useState("");
-  const [metadata, setMetadata] = useState<ChainBidMetadata>();
-  const [isMetadataLoading, setIsMetadataLoading] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const vickreyStorageKey = useMemo(() => {
@@ -206,6 +204,7 @@ const AuctionDetailPage: NextPage = () => {
   });
 
   const tokenUri = item?.metadataURI || erc721TokenUri || erc1155TokenUri || "";
+  const { metadata, isLoading: isMetadataLoading } = useChainBidMetadata(tokenUri, item?.tokenContract, item?.tokenId);
 
   const images = useMemo(() => {
     if (!metadata) return [];
@@ -215,21 +214,6 @@ const AuctionDetailPage: NextPage = () => {
   useEffect(() => {
     setSelectedImageIndex(0);
   }, [metadata]);
-
-  useEffect(() => {
-    if (!tokenUri || !item) return;
-    let ignore = false;
-    setIsMetadataLoading(true);
-    fetchChainBidMetadata(tokenUri, { contractAddress: item.tokenContract, tokenId: item.tokenId }).then(result => {
-      if (!ignore) {
-        setMetadata(result);
-        setIsMetadataLoading(false);
-      }
-    });
-    return () => {
-      ignore = true;
-    };
-  }, [item, tokenUri]);
 
   useEffect(() => {
     if (!vickreyStorageKey) {
@@ -474,22 +458,12 @@ const AuctionDetailPage: NextPage = () => {
           </div>
 
           {/* Thumbnails */}
-          {images.length > 1 && (
-            <div className="grid grid-cols-5 gap-2 p-3">
-              {images.map((img, i) => (
-                <button
-                  key={img}
-                  type="button"
-                  onClick={() => setSelectedImageIndex(i)}
-                  className={`aspect-square overflow-hidden rounded-xl border transition ${
-                    selectedImageIndex === i ? "border-blue-400" : "border-white/10 hover:border-white/30"
-                  }`}
-                >
-                  <img src={img} alt={`Image ${i + 1}`} className="h-full w-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
+          <ImageThumbnailGrid
+            images={images}
+            selectedIndex={selectedImageIndex}
+            onSelect={setSelectedImageIndex}
+            className="p-3"
+          />
         </div>
 
         {/* Provenance & details */}
@@ -497,21 +471,16 @@ const AuctionDetailPage: NextPage = () => {
           <p className="border-b border-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
             Provenance & details
           </p>
-          <div className="grid grid-cols-2 gap-px bg-white/5">
-            {[
+          <DataGrid
+            data={[
               ["Contract", compactAddress(item.tokenContract)],
               ["Token ID", `#${item.tokenId}`],
               ["Standard", TOKEN_TYPE_LABELS[item.tokenType]],
               ["Amount", item.amount.toString()],
               ["Seller", compactAddress(info.seller)],
               ["Winner", isZeroAddress(info.winner) ? "None" : compactAddress(info.winner)],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-[#0a1224] px-4 py-3">
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{label}</p>
-                <p className="m-0 mt-1 break-all font-mono text-xs text-white">{value}</p>
-              </div>
-            ))}
-          </div>
+            ]}
+          />
         </div>
       </aside>
 
@@ -556,18 +525,14 @@ const AuctionDetailPage: NextPage = () => {
         <div className="space-y-4 rounded-2xl border border-white/10 bg-[#0a1224] p-5">
           <h3 className="m-0 text-base font-semibold text-white">Place bid</h3>
 
-          {!connectedAddress && (
-            <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-sm text-blue-100">
-              Connect your wallet to use auction actions.
-            </p>
-          )}
+          {!connectedAddress && <AlertBox variant="info">Connect your wallet to use auction actions.</AlertBox>}
 
           {/* English bid */}
           {isEnglish && (
             <div className="flex gap-3">
               <div className="relative flex-1">
                 <input
-                  className={FIELD}
+                  className={fieldClass}
                   disabled={!isActive || isSeller || isBusy}
                   inputMode="decimal"
                   min="0"
@@ -623,20 +588,16 @@ const AuctionDetailPage: NextPage = () => {
           {isVickrey && (
             <div className="space-y-4">
               {Boolean(isVickreyBlocked) && (
-                <p className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100">
-                  This wallet is blocked for this auction after an invalid reveal.
-                </p>
+                <AlertBox variant="error">This wallet is blocked for this auction after an invalid reveal.</AlertBox>
               )}
 
               {isCommitPhase && (
                 <div className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Private bid (ETH)
-                      </p>
+                      <FormFieldLabel>Private bid (ETH)</FormFieldLabel>
                       <input
-                        className={FIELD}
+                        className={fieldClass}
                         disabled={isSeller || isBusy || hasVickreyCommitment}
                         inputMode="decimal"
                         min="0"
@@ -648,11 +609,9 @@ const AuctionDetailPage: NextPage = () => {
                       />
                     </div>
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Deposit (ETH)
-                      </p>
+                      <FormFieldLabel>Deposit (ETH)</FormFieldLabel>
                       <input
-                        className={FIELD}
+                        className={fieldClass}
                         disabled={isSeller || isBusy || hasVickreyCommitment}
                         inputMode="decimal"
                         min="0"
@@ -665,9 +624,7 @@ const AuctionDetailPage: NextPage = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Secret
-                    </p>
+                    <FormFieldLabel>Secret</FormFieldLabel>
                     <div className="flex overflow-hidden rounded-xl border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
                       <input
                         className="min-w-0 flex-1 bg-[#070d1a] px-3 py-2.5 font-mono text-xs text-white placeholder:text-slate-600 outline-none disabled:opacity-50"
@@ -725,11 +682,9 @@ const AuctionDetailPage: NextPage = () => {
               {isRevealPhase && (
                 <div className="space-y-3">
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Bid amount (ETH)
-                    </p>
+                    <FormFieldLabel>Bid amount (ETH)</FormFieldLabel>
                     <input
-                      className={FIELD}
+                      className={fieldClass}
                       disabled={isBusy || Boolean(userVickreyCommitment?.revealed)}
                       inputMode="decimal"
                       min="0"
@@ -741,11 +696,9 @@ const AuctionDetailPage: NextPage = () => {
                     />
                   </div>
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Secret
-                    </p>
+                    <FormFieldLabel>Secret</FormFieldLabel>
                     <input
-                      className={FIELD + " font-mono text-xs"}
+                      className={fieldClass + " font-mono text-xs"}
                       disabled={isBusy || Boolean(userVickreyCommitment?.revealed)}
                       onChange={e => setVickreySecret(e.target.value)}
                       placeholder="0x..."
@@ -772,9 +725,7 @@ const AuctionDetailPage: NextPage = () => {
               )}
 
               {!isCommitPhase && !isRevealPhase && !hasVickreyCommitment && (
-                <p className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-400">
-                  No commitment found for this wallet.
-                </p>
+                <AlertBox variant="neutral">No commitment found for this wallet.</AlertBox>
               )}
             </div>
           )}
@@ -826,10 +777,10 @@ const AuctionDetailPage: NextPage = () => {
           </div>
 
           {item.assetType === AssetType.Physical && !info.finalized && (
-            <p className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
+            <AlertBox variant="warning">
               This NFT represents a claim certificate. Delivery and identity checks happen off-chain; on-chain
               confirmation releases payment after the winner receives the physical item.
-            </p>
+            </AlertBox>
           )}
 
           {item.assetType === AssetType.Physical &&
@@ -837,10 +788,10 @@ const AuctionDetailPage: NextPage = () => {
             !isZeroAddress(info.winner) &&
             !info.receivedConfirmed &&
             isSeller && (
-              <p className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
+              <AlertBox variant="warning">
                 Payment is held in escrow. Once the buyer receives the physical item and clicks{" "}
                 <strong>Confirm received</strong> from their wallet, funds will be released to you automatically.
-              </p>
+              </AlertBox>
             )}
 
           {item.assetType === AssetType.Physical &&
@@ -848,16 +799,14 @@ const AuctionDetailPage: NextPage = () => {
             !isZeroAddress(info.winner) &&
             !info.receivedConfirmed &&
             isWinner && (
-              <p className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+              <AlertBox variant="success">
                 You won this auction. Once you receive the physical item, click <strong>Confirm received</strong> above
                 to release payment to the seller.
-              </p>
+              </AlertBox>
             )}
 
           {item.assetType === AssetType.Physical && info.receivedConfirmed && (
-            <p className="rounded-xl border border-slate-400/20 bg-slate-500/10 p-3 text-sm text-slate-300">
-              Receipt confirmed — payment has been released to the seller.
-            </p>
+            <AlertBox variant="neutral">Receipt confirmed — payment has been released to the seller.</AlertBox>
           )}
         </div>
       </section>

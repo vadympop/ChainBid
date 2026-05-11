@@ -6,13 +6,15 @@ import type { NextPage } from "next";
 import { type Address, decodeEventLog, parseEther } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { CheckCircleIcon, CubeIcon, RectangleStackIcon } from "@heroicons/react/24/outline";
+import { AlertBox } from "~~/components/chainbid/AlertBox";
+import { DataGrid } from "~~/components/chainbid/DataGrid";
+import { FormFieldLabel } from "~~/components/chainbid/FormFieldLabel";
 import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { StyledSelect } from "~~/components/chainbid/StyledSelect";
-import { useChainBidWriteContract, useSiweSession } from "~~/hooks/chainbid";
+import { useChainBidMetadata, useChainBidWriteContract, useSiweSession } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { AssetType, CreateAuctionForm, TokenType } from "~~/types/chainbid";
-import type { ChainBidMetadata } from "~~/types/chainbid";
 import { erc721Abi, erc1155Abi } from "~~/utils/chainbid/abis";
 import {
   MIN_AUCTION_DURATION_SECONDS,
@@ -22,7 +24,8 @@ import {
   secondsFromHours,
   validateTokenAddress,
 } from "~~/utils/chainbid/auction";
-import { fetchChainBidMetadata, getMetadataAssetType } from "~~/utils/chainbid/ipfs";
+import { getMetadataAssetType } from "~~/utils/chainbid/ipfs";
+import { fieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
 
 type PhysicalItemForm = {
@@ -125,9 +128,6 @@ const SummaryRow = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-const FIELD =
-  "w-full rounded-xl border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
-
 const auctionCreatedAbi = [
   {
     type: "event",
@@ -154,18 +154,13 @@ const CreateAuctionPage: NextPage = () => {
   const [form, setForm] = useState<CreateAuctionForm>(initialForm);
   const [physicalForm, setPhysicalForm] = useState<PhysicalItemForm>(initialPhysicalForm);
   const [isMintingCert, setIsMintingCert] = useState(false);
-  const [metadata, setMetadata] = useState<ChainBidMetadata>();
-  const [isMetadataLoading, setIsMetadataLoading] = useState(false);
 
   const tokenAddress = validateTokenAddress(form.tokenContract) ? (form.tokenContract as Address) : undefined;
   const parsedTokenId = parseTokenIdInput(form.tokenId);
   const parsedAmount = form.tokenType === "ERC1155" ? parseTokenAmountInput(form.amount) : 1n;
   const tokenId = parsedTokenId || 0n;
-  const metadataAssetType = getMetadataAssetType(metadata);
   const isPlatformAuctionNft =
     Boolean(nftInfo?.address && tokenAddress) && tokenAddress?.toLowerCase() === nftInfo?.address.toLowerCase();
-  const shouldLockAssetType =
-    isPlatformAuctionNft && (metadataAssetType === "Digital" || metadataAssetType === "Physical");
 
   const isCertMinted =
     form.assetType === "Physical" &&
@@ -204,26 +199,15 @@ const CreateAuctionPage: NextPage = () => {
   });
 
   const tokenUri = erc721TokenUri || erc1155TokenUri;
+  const { metadata, isLoading: isMetadataLoading } = useChainBidMetadata(
+    form.tokenId ? tokenUri : undefined,
+    tokenAddress,
+    tokenId,
+  );
 
-  useEffect(() => {
-    if (!tokenUri || !tokenAddress || !form.tokenId) {
-      setMetadata(undefined);
-      return;
-    }
-
-    let ignore = false;
-    setIsMetadataLoading(true);
-    fetchChainBidMetadata(tokenUri, { contractAddress: tokenAddress, tokenId }).then(result => {
-      if (!ignore) {
-        setMetadata(result);
-        setIsMetadataLoading(false);
-      }
-    });
-
-    return () => {
-      ignore = true;
-    };
-  }, [form.tokenId, tokenAddress, tokenId, tokenUri]);
+  const metadataAssetType = getMetadataAssetType(metadata);
+  const shouldLockAssetType =
+    isPlatformAuctionNft && (metadataAssetType === "Digital" || metadataAssetType === "Physical");
 
   useEffect(() => {
     if (metadataAssetType === "Digital" || metadataAssetType === "Physical") {
@@ -529,22 +513,14 @@ const CreateAuctionPage: NextPage = () => {
                       <CheckCircleIcon className="h-5 w-5 shrink-0" />
                       NFT certificate minted
                     </div>
-                    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/5 text-sm">
-                      <div className="bg-black/30 px-3 py-2">
-                        <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                          Contract
-                        </p>
-                        <p className="m-0 mt-1 font-mono text-xs text-white">
-                          {form.tokenContract.slice(0, 8)}…{form.tokenContract.slice(-6)}
-                        </p>
-                      </div>
-                      <div className="bg-black/30 px-3 py-2">
-                        <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-                          Token ID
-                        </p>
-                        <p className="m-0 mt-1 font-mono text-xs text-white">#{form.tokenId}</p>
-                      </div>
-                    </div>
+                    <DataGrid
+                      compact
+                      className="overflow-hidden rounded-xl border border-white/10"
+                      data={[
+                        ["Contract", `${form.tokenContract.slice(0, 8)}…${form.tokenContract.slice(-6)}`],
+                        ["Token ID", `#${form.tokenId}`],
+                      ]}
+                    />
                     <button
                       type="button"
                       className="text-xs text-slate-500 underline hover:text-white"
@@ -562,11 +538,9 @@ const CreateAuctionPage: NextPage = () => {
                   <div className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                          Item title
-                        </p>
+                        <FormFieldLabel>Item title</FormFieldLabel>
                         <input
-                          className={FIELD}
+                          className={fieldClass}
                           disabled={isMintingCert}
                           onChange={e => setPhysicalForm(f => ({ ...f, title: e.target.value }))}
                           placeholder="e.g. Vintage Rolex Submariner"
@@ -574,11 +548,9 @@ const CreateAuctionPage: NextPage = () => {
                         />
                       </div>
                       <div>
-                        <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                          Category
-                        </p>
+                        <FormFieldLabel>Category</FormFieldLabel>
                         <StyledSelect
-                          className={FIELD}
+                          className={fieldClass}
                           disabled={isMintingCert}
                           onChange={e => setPhysicalForm(f => ({ ...f, category: e.target.value }))}
                           options={[
@@ -598,11 +570,9 @@ const CreateAuctionPage: NextPage = () => {
                     </div>
 
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Description
-                      </p>
+                      <FormFieldLabel>Description</FormFieldLabel>
                       <textarea
-                        className={FIELD + " min-h-24 resize-none"}
+                        className={fieldClass + " min-h-24 resize-none"}
                         disabled={isMintingCert}
                         onChange={e => setPhysicalForm(f => ({ ...f, description: e.target.value }))}
                         placeholder="Describe the item — condition, history, notable features…"
@@ -612,11 +582,9 @@ const CreateAuctionPage: NextPage = () => {
                     </div>
 
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Estimated value (USD)
-                      </p>
+                      <FormFieldLabel>Estimated value (USD)</FormFieldLabel>
                       <input
-                        className={FIELD}
+                        className={fieldClass}
                         disabled={isMintingCert}
                         inputMode="decimal"
                         min="0"
@@ -629,9 +597,7 @@ const CreateAuctionPage: NextPage = () => {
                     </div>
 
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Photos
-                      </p>
+                      <FormFieldLabel>Photos</FormFieldLabel>
                       <ImageUploader
                         disabled={isMintingCert}
                         files={physicalForm.images}
@@ -660,9 +626,7 @@ const CreateAuctionPage: NextPage = () => {
               <>
                 {/* Token standard */}
                 <div>
-                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                    Token standard
-                  </p>
+                  <FormFieldLabel>Token standard</FormFieldLabel>
                   <div className="flex gap-2">
                     {(["ERC721", "ERC1155"] as const).map(std => (
                       <button
@@ -690,9 +654,7 @@ const CreateAuctionPage: NextPage = () => {
 
                 {/* Token contract */}
                 <div>
-                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                    Token contract
-                  </p>
+                  <FormFieldLabel>Token contract</FormFieldLabel>
                   <div className="flex overflow-hidden rounded-xl border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
                     <input
                       className="min-w-0 flex-1 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none disabled:opacity-50"
@@ -715,11 +677,9 @@ const CreateAuctionPage: NextPage = () => {
                 {/* Token ID + Amount */}
                 <div className={form.tokenType === "ERC1155" ? "grid gap-3 sm:grid-cols-2" : ""}>
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Token ID
-                    </p>
+                    <FormFieldLabel>Token ID</FormFieldLabel>
                     <input
-                      className={FIELD}
+                      className={fieldClass}
                       disabled={isPending}
                       inputMode="numeric"
                       min="0"
@@ -732,11 +692,9 @@ const CreateAuctionPage: NextPage = () => {
                   </div>
                   {form.tokenType === "ERC1155" && (
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Amount
-                      </p>
+                      <FormFieldLabel>Amount</FormFieldLabel>
                       <input
-                        className={FIELD}
+                        className={fieldClass}
                         disabled={isPending}
                         inputMode="numeric"
                         min="1"
@@ -755,18 +713,14 @@ const CreateAuctionPage: NextPage = () => {
 
                 {/* Contract + Token ID info strip */}
                 {form.tokenContract && form.tokenId && (
-                  <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/5 text-sm">
-                    <div className="bg-black/30 px-3 py-2">
-                      <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Contract</p>
-                      <p className="m-0 mt-1 font-mono text-xs text-white">
-                        {form.tokenContract.slice(0, 8)}…{form.tokenContract.slice(-6)}
-                      </p>
-                    </div>
-                    <div className="bg-black/30 px-3 py-2">
-                      <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Token ID</p>
-                      <p className="m-0 mt-1 font-mono text-xs text-white">#{form.tokenId}</p>
-                    </div>
-                  </div>
+                  <DataGrid
+                    compact
+                    className="overflow-hidden rounded-xl border border-white/10"
+                    data={[
+                      ["Contract", `${form.tokenContract.slice(0, 8)}…${form.tokenContract.slice(-6)}`],
+                      ["Token ID", `#${form.tokenId}`],
+                    ]}
+                  />
                 )}
               </>
             )}
@@ -809,11 +763,9 @@ const CreateAuctionPage: NextPage = () => {
             {/* Pricing */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                  Reserve (Ξ)
-                </p>
+                <FormFieldLabel>Reserve (Ξ)</FormFieldLabel>
                 <input
-                  className={FIELD}
+                  className={fieldClass}
                   disabled={isPending}
                   inputMode="decimal"
                   min="0"
@@ -826,11 +778,9 @@ const CreateAuctionPage: NextPage = () => {
               </div>
               {form.auctionType === "Dutch" && (
                 <div>
-                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                    Start price (Ξ)
-                  </p>
+                  <FormFieldLabel>Start price (Ξ)</FormFieldLabel>
                   <input
-                    className={FIELD}
+                    className={fieldClass}
                     disabled={isPending}
                     inputMode="decimal"
                     min="0"
@@ -887,11 +837,9 @@ const CreateAuctionPage: NextPage = () => {
             {form.auctionType === "Vickrey" && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                    Commit duration (h)
-                  </p>
+                  <FormFieldLabel>Commit duration (h)</FormFieldLabel>
                   <input
-                    className={FIELD}
+                    className={fieldClass}
                     disabled={isPending}
                     inputMode="decimal"
                     min="0.17"
@@ -902,11 +850,9 @@ const CreateAuctionPage: NextPage = () => {
                   />
                 </div>
                 <div>
-                  <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                    Reveal duration (h)
-                  </p>
+                  <FormFieldLabel>Reveal duration (h)</FormFieldLabel>
                   <input
-                    className={FIELD}
+                    className={fieldClass}
                     disabled={isPending}
                     inputMode="decimal"
                     min="0.17"
@@ -920,10 +866,10 @@ const CreateAuctionPage: NextPage = () => {
             )}
 
             {form.tokenType === "ERC1155" && !isErc1155ApprovedForFactory && form.assetType === "Digital" && (
-              <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+              <AlertBox variant="warning" className="text-xs">
                 Creating this auction will ask your wallet for collection permission so ChainBid can transfer the
                 selected tokens into escrow.
-              </div>
+              </AlertBox>
             )}
           </section>
         </div>
