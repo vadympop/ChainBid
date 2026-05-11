@@ -279,6 +279,10 @@ All files            |    99.42 |    90.63 |    97.92 |    99.07 |              
 
 ## Known Limitations
 
+The main limitation is that `AuctionNFT.sol` does not prove ownership of a real-world item. A user can mint an NFT with metadata for an item, for example a car or a collectible, but the contract cannot verify that the user actually owns that item outside the blockchain. In our project, this NFT is treated as a claim certificate, not as legal proof of ownership.
+
+Another limitation is the physical item delivery flow. For physical auctions, the winner has to call `confirmReceived` after receiving the item. This releases the payment to the seller. Handling disputes, delivery fraud, legal ownership checks, or cases where the winner refuses to confirm receipt is outside the scope of this project.
+
 ## AI Usage
 
 ## What We Learned
