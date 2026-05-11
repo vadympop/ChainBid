@@ -3,8 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { NextPage } from "next";
 import { type Address, decodeEventLog, parseEther } from "viem";
-import { CheckCircleIcon, CubeIcon, RectangleStackIcon } from "@heroicons/react/24/outline";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
+import { CheckCircleIcon, CubeIcon, RectangleStackIcon } from "@heroicons/react/24/outline";
 import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { useChainBidWriteContract } from "~~/hooks/chainbid";
@@ -402,7 +402,6 @@ const CreateAuctionPage: NextPage = () => {
       <form className="grid gap-5 lg:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
         {/* ── Main column ── */}
         <div className="space-y-4">
-
           {/* Item-type selector */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {[
@@ -536,7 +535,16 @@ const CreateAuctionPage: NextPage = () => {
                           value={physicalForm.category}
                         >
                           <option value="">Select category</option>
-                          {["Art", "Collectibles", "Electronics", "Fashion", "Jewelry", "Sports", "Watches", "Other"].map(c => (
+                          {[
+                            "Art",
+                            "Collectibles",
+                            "Electronics",
+                            "Fashion",
+                            "Jewelry",
+                            "Sports",
+                            "Watches",
+                            "Other",
+                          ].map(c => (
                             <option key={c} value={c}>
                               {c}
                             </option>
@@ -803,9 +811,9 @@ const CreateAuctionPage: NextPage = () => {
                       className="w-20 rounded-lg border border-white/10 bg-[#070d1a] px-2 py-1.5 text-right text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50"
                       disabled={isPending}
                       inputMode="decimal"
-                      min="1"
+                      min="0.1"
                       max="168"
-                      step="1"
+                      step="0.01"
                       type="number"
                       onChange={event => updateForm("durationHours", event.target.value)}
                       value={form.durationHours}
@@ -884,11 +892,18 @@ const CreateAuctionPage: NextPage = () => {
             <SummaryRow label="Type" value={form.assetType === "Physical" ? "Physical item" : "On-chain NFT"} />
             <SummaryRow label="Format" value={formatLabel} />
             {form.auctionType !== "Vickrey" ? (
-              <SummaryRow label="Duration" value={`${form.durationHours}h`} />
+              <SummaryRow
+                label="Duration"
+                value={
+                  Number(form.durationHours) < 1
+                    ? `${Math.round(Number(form.durationHours) * 60)}m`
+                    : `${form.durationHours}h`
+                }
+              />
             ) : (
               <SummaryRow
                 label="Commit / Reveal"
-                value={`${form.commitDurationHours}h / ${form.revealDurationHours}h`}
+                value={`${Number(form.commitDurationHours) < 1 ? `${Math.round(Number(form.commitDurationHours) * 60)}m` : `${form.commitDurationHours}h`} / ${Number(form.revealDurationHours) < 1 ? `${Math.round(Number(form.revealDurationHours) * 60)}m` : `${form.revealDurationHours}h`}`}
               />
             )}
             {form.assetType === "Digital" && <SummaryRow label="Token standard" value={form.tokenType} />}
@@ -904,9 +919,7 @@ const CreateAuctionPage: NextPage = () => {
           {/* Factory */}
           <div className="rounded-xl border border-white/10 bg-[#0a1224] px-4 py-3">
             <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">AuctionFactory</p>
-            <p className="m-0 mt-1 break-all font-mono text-xs text-white">
-              {factoryInfo?.address || "Not deployed"}
-            </p>
+            <p className="m-0 mt-1 break-all font-mono text-xs text-white">{factoryInfo?.address || "Not deployed"}</p>
           </div>
 
           {/* CTA */}
