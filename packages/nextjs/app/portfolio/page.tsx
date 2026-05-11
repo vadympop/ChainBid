@@ -71,19 +71,19 @@ const PortfolioPage: NextPage = () => {
 
       {/* Stats */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Listed</p>
           <p className="m-0 mt-2 text-4xl font-bold text-blue-400">{listedAuctions.length}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Total on platform</p>
           <p className="m-0 mt-2 text-4xl font-bold text-emerald-400">{allAuctionRecords.length}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">NFTs minted</p>
           <p className="m-0 mt-2 text-4xl font-bold text-amber-400">{mintedTokenIds.length}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
           <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Wallet</p>
           <p className="m-0 mt-3 break-all font-mono text-xs font-semibold text-slate-300">
             {address ? compactAddress(address) : "—"}

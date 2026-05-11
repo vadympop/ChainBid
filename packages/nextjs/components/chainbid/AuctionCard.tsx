@@ -240,16 +240,16 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
   const timeLeftSeconds = Number(timeTarget) - Number(now);
   const isUrgent = timeLeftSeconds > 0 && timeLeftSeconds < 3600;
 
-  const typeBadgeBg = isEnglish ? "bg-blue-500/70" : isDutch ? "bg-orange-500/70" : "bg-violet-500/70";
+  const typeBadgeBg = isEnglish ? "bg-blue-500/50" : isDutch ? "bg-orange-500/50" : "bg-violet-500/50";
   const typeBadgeText = isEnglish ? "text-blue-200" : isDutch ? "text-orange-200" : "text-violet-200";
 
   return (
     <Link
       href={`/auction/${record.contractAddress}`}
-      className="group overflow-hidden rounded-xl border border-white/10 bg-[#0a1224] transition hover:-translate-y-0.5 hover:border-blue-500/40"
+      className="group overflow-hidden rounded-3xl border border-white/10 bg-[#0a1224] transition hover:-translate-y-0.5 hover:border-blue-500/40"
     >
       {/* Image with overlay badges */}
-      <div className="relative aspect-[4/3] bg-slate-950">
+      <div className="relative aspect-[4/4] rounded-xl bg-slate-950">
         {metadata?.image ? (
           <img src={metadata.image} alt={metadata.name} className="h-full w-full object-cover" />
         ) : (
@@ -258,21 +258,21 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
           </div>
         )}
         {/* Top-left: type + physical badges */}
-        <div className="absolute left-3 top-3 flex items-center gap-1.5">
+        <div className="absolute left-4 top-4 flex items-center gap-1.5">
           <span
-            className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm ${typeBadgeBg} ${typeBadgeText}`}
+            className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm ${typeBadgeBg} ${typeBadgeText}`}
           >
             {recordTypeLabel}
           </span>
           {isPhysical && (
-            <span className="rounded bg-red-500/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-200 backdrop-blur-sm">
+            <span className="rounded-lg bg-red-500/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-200 backdrop-blur-sm">
               Physical
             </span>
           )}
         </div>
         {/* Top-right: live indicator */}
         {isLive && (
-          <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
+          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
           </div>

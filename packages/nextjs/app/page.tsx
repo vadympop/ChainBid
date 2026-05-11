@@ -155,7 +155,7 @@ const Home: NextPage = () => {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
       {/* Filter / Sort bar */}
-      <section className="space-y-3 rounded-xl border border-white/10 bg-[#0a1224] px-4 py-3">
+      <section className="space-y-3 rounded-3xl border border-white/10 bg-[#0a1224] px-4 py-3">
         {/* Search + Sort row */}
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -163,14 +163,14 @@ const Home: NextPage = () => {
             placeholder="Search by name, address, or seller…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="min-w-[200px] flex-1 rounded-lg bg-white/[0.05] px-3 py-1.5 text-sm text-white placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
+            className="min-w-[200px] flex-1 rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
           />
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Sort</span>
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortBy)}
-              className="rounded-lg bg-white/[0.05] px-3 py-1.5 text-sm text-white outline-none focus:ring-1 focus:ring-blue-500"
+              className="rounded-xl bg-white/[0.05] px-3 py-1.5 text-sm text-white outline-none focus:ring-1 focus:ring-blue-500"
             >
               {sortOptions.map(opt => (
                 <option key={opt} value={opt} className="bg-[#0a1224]">

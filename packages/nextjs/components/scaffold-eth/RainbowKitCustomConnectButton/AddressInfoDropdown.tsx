@@ -53,7 +53,7 @@ export const AddressInfoDropdown = ({
   return (
     <>
       <details ref={dropdownRef} className="dropdown dropdown-end leading-3">
-        <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 transition hover:bg-white/10">
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 transition hover:bg-white/10">
           <div className="text-left">
             <p className="m-0 text-sm font-semibold leading-tight text-white">
               {isENS(displayName) ? displayName : checkSumAddress?.slice(0, 6) + "..." + checkSumAddress?.slice(-4)}
