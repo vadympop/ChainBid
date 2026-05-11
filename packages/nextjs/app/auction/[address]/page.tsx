@@ -814,10 +814,38 @@ const AuctionDetailPage: NextPage = () => {
             </button>
           </div>
 
-          {item.assetType === AssetType.Physical && (
+          {item.assetType === AssetType.Physical && !info.finalized && (
             <p className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
               This NFT represents a claim certificate. Delivery and identity checks happen off-chain; on-chain
               confirmation releases payment after the winner receives the physical item.
+            </p>
+          )}
+
+          {item.assetType === AssetType.Physical &&
+            info.finalized &&
+            !isZeroAddress(info.winner) &&
+            !info.receivedConfirmed &&
+            isSeller && (
+              <p className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
+                Payment is held in escrow. Once the buyer receives the physical item and clicks{" "}
+                <strong>Confirm received</strong> from their wallet, funds will be released to you automatically.
+              </p>
+            )}
+
+          {item.assetType === AssetType.Physical &&
+            info.finalized &&
+            !isZeroAddress(info.winner) &&
+            !info.receivedConfirmed &&
+            isWinner && (
+              <p className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                You won this auction. Once you receive the physical item, click <strong>Confirm received</strong> above
+                to release payment to the seller.
+              </p>
+            )}
+
+          {item.assetType === AssetType.Physical && info.receivedConfirmed && (
+            <p className="rounded-xl border border-slate-400/20 bg-slate-500/10 p-3 text-sm text-slate-300">
+              Receipt confirmed — payment has been released to the seller.
             </p>
           )}
         </div>
