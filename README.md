@@ -154,6 +154,95 @@ We use this because the Pinata API key belongs to the server. Without authentica
 
 ## Setup Instructions
 
+### 1. Install dependencies
+
+Install all project dependencies from the repository root:
+
+```bash
+yarn install
+```
+
+### 2. Configure environment variables
+
+Create a `.env.local` file inside the Next.js package:
+
+```text
+packages/nextjs/.env.local
+```
+
+For local development, the most important variable is the Pinata JWT:
+
+```env
+PINATA_JWT=your_pinata_jwt_here
+```
+
+This is used by the backend upload route to upload images and metadata to IPFS through Pinata. The JWT must stay server-side and should not be exposed with a `NEXT_PUBLIC_` prefix.
+
+For Sign-In with Ethereum sessions, you can also set:
+
+```env
+IRON_SESSION_SECRET=your_long_random_secret_here
+```
+
+If this is not set, the app can still run in development, but sessions may be reset when the server restarts.
+
+Depending on the network and wallet configuration, the frontend can also use:
+
+```env
+NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_key_here
+NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=your_walletconnect_project_id_here
+```
+
+These are used by Scaffold-ETH/RainbowKit for RPC access and wallet connection support.
+
+### 3. Start a local blockchain
+
+Run a local Ethereum network in the first terminal:
+
+```bash
+yarn chain
+```
+
+This starts a local blockchain for development and testing.
+
+### 4. Deploy contracts locally
+
+In a second terminal, deploy the smart contracts to the local network:
+
+```bash
+yarn deploy
+```
+
+This deploys the auction contracts, factory contract, and NFT contract. After deployment, Scaffold-ETH generates the contract addresses and ABIs for the frontend.
+
+### 5. Start the frontend
+
+In a third terminal, start the Next.js frontend:
+
+```bash
+yarn start
+```
+
+The app will be available at:
+
+```text
+http://localhost:3000
+```
+
+### 6. Run tests
+
+Run the smart contract tests:
+
+```bash
+yarn test
+```
+
+Run tests with coverage:
+
+```bash
+yarn coverage
+```
+
 ## Bonuses Implemented
 
 ## Known Limitations
@@ -163,43 +252,3 @@ We use this because the Pinata API key belongs to the server. Without authentica
 ## What We Learned
 
 ## Conclusion
-
-Uses scaffold eth 2
-
-## How to develop?
-
-1. Run a local network in the first terminal:
-
-```
-yarn chain
-```
-
-This command starts a local Ethereum network that runs on your local machine and can be used for testing and development.
-
-2. On a second terminal, deploy the test contract:
-
-```
-yarn deploy
-```
-
-This command deploys a test smart contract to the local network.
-
-3. On a third terminal, start your NextJS app:
-
-```
-yarn start
-```
-
-Run tests:
-
-```
-yarn test
-```
-
-Run tests with coverage:
-
-```
-yarn coverage
-```
-
-Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
