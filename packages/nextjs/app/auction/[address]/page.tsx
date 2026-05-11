@@ -676,6 +676,10 @@ const AuctionDetailPage: NextPage = () => {
                   >
                     Commit bid
                   </TxButton>
+                  <AlertBox variant="warning">
+                    Save your <strong>secret</strong> and <strong>bid amount</strong> — you will need both to reveal
+                    your bid in the next phase. Without them you cannot reveal, so your bid will not count.
+                  </AlertBox>
                 </div>
               )}
 
