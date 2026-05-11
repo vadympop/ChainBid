@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { NextPage } from "next";
 import { type Address, decodeEventLog, parseEther } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
@@ -124,11 +125,24 @@ const SummaryRow = ({ label, value }: { label: string; value: string }) => (
 );
 
 const FIELD =
-  "w-full rounded-lg border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
+  "w-full rounded-xl border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
+
+const auctionCreatedAbi = [
+  {
+    type: "event",
+    name: "AuctionCreated",
+    inputs: [
+      { indexed: true, name: "contractAddress", type: "address" },
+      { indexed: false, name: "auctionType", type: "uint8" },
+      { indexed: true, name: "seller", type: "address" },
+    ],
+  },
+] as const;
 
 const CreateAuctionPage: NextPage = () => {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const router = useRouter();
   const { data: factoryInfo } = useDeployedContractInfo({ contractName: "AuctionFactory" });
   const { data: nftInfo } = useDeployedContractInfo({ contractName: "AuctionNFT" });
   const { writeContractAsync: writeFactoryAsync, isMining: isCreating } = useScaffoldWriteContract({
@@ -362,18 +376,19 @@ const CreateAuctionPage: NextPage = () => {
         notification.success("Factory approved. Creating auction.");
       }
 
+      let createHash: `0x${string}` | undefined;
       if (form.auctionType === "English") {
-        await writeFactoryAsync({
+        createHash = await writeFactoryAsync({
           functionName: "createEnglishAuction",
           args: [item, reservePrice, duration],
         });
       } else if (form.auctionType === "Dutch") {
-        await writeFactoryAsync({
+        createHash = await writeFactoryAsync({
           functionName: "createDutchAuction",
           args: [item, parseEther(form.startPrice), reservePrice, duration],
         });
       } else {
-        await writeFactoryAsync({
+        createHash = await writeFactoryAsync({
           functionName: "createVickreyAuction",
           args: [
             item,
@@ -384,8 +399,29 @@ const CreateAuctionPage: NextPage = () => {
         });
       }
 
+      if (!createHash || !publicClient) return;
+
+      const createReceipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+      let newAuctionAddress: Address | undefined;
+      for (const log of createReceipt.logs) {
+        try {
+          const decoded = decodeEventLog({ abi: auctionCreatedAbi, data: log.data, topics: log.topics });
+          if (decoded.eventName === "AuctionCreated") {
+            newAuctionAddress = decoded.args.contractAddress;
+            break;
+          }
+        } catch {
+          /* skip non-matching logs */
+        }
+      }
+
       notification.success(`${form.auctionType} auction created.`);
-      setForm(current => ({ ...initialForm, tokenContract: current.tokenContract }));
+
+      if (newAuctionAddress) {
+        router.push(`/auction/${newAuctionAddress}`);
+      } else {
+        setForm(current => ({ ...initialForm, tokenContract: current.tokenContract }));
+      }
     } catch (error) {
       notification.error(getParsedError(error));
     }
@@ -446,7 +482,7 @@ const CreateAuctionPage: NextPage = () => {
                       }
                     }
                   }}
-                  className={`rounded-xl border p-4 text-left transition ${
+                  className={`rounded-2xl border p-4 text-left transition ${
                     active ? "border-blue-500 bg-blue-600/10" : "border-white/10 bg-[#0a1224] hover:border-white/20"
                   }`}
                 >
@@ -469,7 +505,7 @@ const CreateAuctionPage: NextPage = () => {
           )}
 
           {/* Step 1 */}
-          <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-[#0a1224] p-5">
             <div className="flex items-center gap-3">
               <StepBadge n={1} />
               <h3 className="m-0 text-base font-semibold text-white">
@@ -480,7 +516,7 @@ const CreateAuctionPage: NextPage = () => {
             {form.assetType === "Physical" ? (
               /* ── Physical item form ── */
               <>
-                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-xs leading-relaxed text-blue-200">
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-xs leading-relaxed text-blue-200">
                   ChainBid mints an ERC-721 certificate representing your item. The NFT is used as the auction lot — the
                   winner receives custody transfer and shipping.
                 </div>
@@ -492,7 +528,7 @@ const CreateAuctionPage: NextPage = () => {
                       <CheckCircleIcon className="h-5 w-5 shrink-0" />
                       NFT certificate minted
                     </div>
-                    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/5 text-sm">
+                    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/5 text-sm">
                       <div className="bg-black/30 px-3 py-2">
                         <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
                           Contract
@@ -644,7 +680,7 @@ const CreateAuctionPage: NextPage = () => {
                             tokenType: std,
                           }))
                         }
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                        className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
                           form.tokenType === std
                             ? "bg-blue-600 text-white"
                             : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
@@ -661,7 +697,7 @@ const CreateAuctionPage: NextPage = () => {
                   <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
                     Token contract
                   </p>
-                  <div className="flex overflow-hidden rounded-lg border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
+                  <div className="flex overflow-hidden rounded-xl border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
                     <input
                       className="min-w-0 flex-1 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none disabled:opacity-50"
                       disabled={isPending}
@@ -723,7 +759,7 @@ const CreateAuctionPage: NextPage = () => {
 
                 {/* Contract + Token ID info strip */}
                 {form.tokenContract && form.tokenId && (
-                  <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/5 text-sm">
+                  <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/5 text-sm">
                     <div className="bg-black/30 px-3 py-2">
                       <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Contract</p>
                       <p className="m-0 mt-1 font-mono text-xs text-white">
@@ -741,7 +777,7 @@ const CreateAuctionPage: NextPage = () => {
           </section>
 
           {/* Step 2: Auction format */}
-          <section className="space-y-4 rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <section className="space-y-4 rounded-2xl border border-white/10 bg-[#0a1224] p-5">
             <div className="flex items-center gap-3">
               <StepBadge n={2} />
               <h3 className="m-0 text-base font-semibold text-white">Auction format</h3>
@@ -820,7 +856,7 @@ const CreateAuctionPage: NextPage = () => {
                   <p className="m-0 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Duration</p>
                   <div className="flex items-center gap-1.5">
                     <input
-                      className="w-20 rounded-lg border border-white/10 bg-[#070d1a] px-2 py-1.5 text-right text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50"
+                      className="w-20 rounded-xl border border-white/10 bg-[#070d1a] px-2 py-1.5 text-right text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50"
                       disabled={isPending}
                       inputMode="decimal"
                       min="0.17"
@@ -888,7 +924,7 @@ const CreateAuctionPage: NextPage = () => {
             )}
 
             {form.tokenType === "ERC1155" && !isErc1155ApprovedForFactory && form.assetType === "Digital" && (
-              <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+              <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs text-amber-100">
                 Creating this auction will ask your wallet for collection permission so ChainBid can transfer the
                 selected tokens into escrow.
               </div>
@@ -899,7 +935,7 @@ const CreateAuctionPage: NextPage = () => {
         {/* ── Right sidebar ── */}
         <aside className="space-y-4">
           {/* Summary */}
-          <div className="rounded-xl border border-white/10 bg-[#0a1224] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[#0a1224] p-5">
             <p className="m-0 mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Summary</p>
             <SummaryRow label="Type" value={form.assetType === "Physical" ? "Physical item" : "On-chain NFT"} />
             <SummaryRow label="Format" value={formatLabel} />
@@ -922,14 +958,14 @@ const CreateAuctionPage: NextPage = () => {
           />
 
           {/* Factory */}
-          <div className="rounded-xl border border-white/10 bg-[#0a1224] px-4 py-3">
+          <div className="rounded-2xl border border-white/10 bg-[#0a1224] px-4 py-3">
             <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">AuctionFactory</p>
             <p className="m-0 mt-1 break-all font-mono text-xs text-white">{factoryInfo?.address || "Not deployed"}</p>
           </div>
 
           {/* CTA */}
           <button
-            className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-bold text-white transition hover:from-blue-500 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-bold text-white transition hover:from-blue-500 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={isPending || (form.assetType === "Physical" && !isCertMinted)}
             type="submit"
           >

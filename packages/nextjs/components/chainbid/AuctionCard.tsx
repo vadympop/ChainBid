@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import type { Address } from "viem";
 import { useReadContract } from "wagmi";
 import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chainbid";
 import type {
@@ -28,22 +29,18 @@ import {
 } from "~~/utils/chainbid/auction";
 import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
 
-type AuctionCardProps = {
-  record: AuctionRecord;
-  typeFilter: "All" | "English" | "Dutch" | "Vickrey";
-  assetFilter: "All" | "Digital" | "Physical";
-  statusFilter: "All" | "Active" | "Commit" | "Reveal" | "Ended" | "Finalized" | "Awaiting confirmation";
-  now: bigint;
+export type AuctionCardResolvedData = {
+  name: string;
+  price: bigint;
+  endTime: bigint;
+  status: AuctionStatus;
+  assetType: "Digital" | "Physical";
 };
 
-const matchesStatusFilter = (status: AuctionStatus, filter: AuctionCardProps["statusFilter"]) => {
-  if (filter === "All") return true;
-  if (filter === "Active") return status === "active" || status === "commit" || status === "reveal";
-  if (filter === "Commit") return status === "commit";
-  if (filter === "Reveal") return status === "reveal";
-  if (filter === "Ended") return status === "ended";
-  if (filter === "Finalized") return status === "finalized";
-  return status === "awaiting-confirmation";
+type AuctionCardProps = {
+  record: AuctionRecord;
+  now: bigint;
+  onResolved?: (address: Address, data: AuctionCardResolvedData) => void;
 };
 
 const getRecordTypeLabel = (auctionType: AuctionType) => {
@@ -52,7 +49,7 @@ const getRecordTypeLabel = (auctionType: AuctionType) => {
   return "Vickrey";
 };
 
-export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now }: AuctionCardProps) => {
+export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
   const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const isEnglish = Number(record.auctionType) === AuctionType.English;
   const isDutch = Number(record.auctionType) === AuctionType.Dutch;
@@ -141,7 +138,60 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
     };
   }, [item, tokenUri]);
 
-  if (typeFilter !== "All" && typeFilter !== recordTypeLabel) return null;
+  useEffect(() => {
+    if (!onResolved || !info || !item) return;
+
+    const resolvedStatus = isVickrey
+      ? getVickreyAuctionStatus(
+          (info as VickreyAuctionInfo).commitEndTime,
+          (info as VickreyAuctionInfo).revealEndTime,
+          info.finalized,
+          item.assetType,
+          info.winner,
+          info.receivedConfirmed,
+          now,
+        )
+      : getAuctionStatus(
+          (info as EnglishAuctionInfo | DutchAuctionInfo).endTime,
+          info.finalized,
+          item.assetType,
+          info.winner,
+          info.receivedConfirmed,
+          now,
+        );
+
+    const resolvedPrice = isEnglish
+      ? getEnglishPrice(info as EnglishAuctionInfo)
+      : isDutch && (info as DutchAuctionInfo).finalized
+        ? getDutchPrice(info as DutchAuctionInfo)
+        : isDutch
+          ? (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo))
+          : getVickreyPrice(info as VickreyAuctionInfo);
+
+    const resolvedEndTime = isVickrey
+      ? (info as VickreyAuctionInfo).revealEndTime
+      : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
+
+    onResolved(record.contractAddress, {
+      name: metadata?.name ?? "",
+      price: resolvedPrice,
+      endTime: resolvedEndTime,
+      status: resolvedStatus,
+      assetType: item.assetType === AssetType.Digital ? "Digital" : "Physical",
+    });
+  }, [
+    onResolved,
+    record.contractAddress,
+    info,
+    item,
+    metadata?.name,
+    now,
+    dutchCurrentPrice,
+    isVickrey,
+    isEnglish,
+    isDutch,
+  ]);
+
   if (!info || !item) {
     return (
       <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0a1224]">
@@ -180,7 +230,6 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
       : isDutch
         ? (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo))
         : getVickreyPrice(info as VickreyAuctionInfo);
-  const assetLabel = item.assetType === AssetType.Digital ? "Digital" : "Physical";
   const isPhysical = item.assetType === AssetType.Physical;
   const timeTarget = isVickrey
     ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
@@ -191,19 +240,16 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
   const timeLeftSeconds = Number(timeTarget) - Number(now);
   const isUrgent = timeLeftSeconds > 0 && timeLeftSeconds < 3600;
 
-  const typeBadgeBg = isEnglish ? "bg-blue-500/70" : isDutch ? "bg-orange-500/70" : "bg-violet-500/70";
+  const typeBadgeBg = isEnglish ? "bg-blue-500/50" : isDutch ? "bg-orange-500/50" : "bg-violet-500/50";
   const typeBadgeText = isEnglish ? "text-blue-200" : isDutch ? "text-orange-200" : "text-violet-200";
-
-  if (assetFilter !== "All" && assetFilter !== assetLabel) return null;
-  if (!matchesStatusFilter(status, statusFilter)) return null;
 
   return (
     <Link
       href={`/auction/${record.contractAddress}`}
-      className="group overflow-hidden rounded-xl border border-white/10 bg-[#0a1224] transition hover:-translate-y-0.5 hover:border-blue-500/40"
+      className="group overflow-hidden rounded-3xl border border-white/10 bg-[#0a1224] transition hover:-translate-y-0.5 hover:border-blue-500/40"
     >
       {/* Image with overlay badges */}
-      <div className="relative aspect-[4/3] bg-slate-950">
+      <div className="relative aspect-[4/4] rounded-xl bg-slate-950">
         {metadata?.image ? (
           <img src={metadata.image} alt={metadata.name} className="h-full w-full object-cover" />
         ) : (
@@ -212,21 +258,21 @@ export const AuctionCard = ({ record, typeFilter, assetFilter, statusFilter, now
           </div>
         )}
         {/* Top-left: type + physical badges */}
-        <div className="absolute left-3 top-3 flex items-center gap-1.5">
+        <div className="absolute left-4 top-4 flex items-center gap-1.5">
           <span
-            className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm ${typeBadgeBg} ${typeBadgeText}`}
+            className={`rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm ${typeBadgeBg} ${typeBadgeText}`}
           >
             {recordTypeLabel}
           </span>
           {isPhysical && (
-            <span className="rounded bg-red-500/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-200 backdrop-blur-sm">
+            <span className="rounded-lg bg-red-500/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-200 backdrop-blur-sm">
               Physical
             </span>
           )}
         </div>
         {/* Top-right: live indicator */}
         {isLive && (
-          <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
+          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
           </div>

@@ -36,14 +36,14 @@ export const NftMetadataPreview = ({ metadata, isLoading, tokenLabel }: NftMetad
 
   if (!metadata) {
     return (
-      <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-slate-400">
+      <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-6 text-sm text-slate-400">
         Enter a token contract and token ID to preview metadata.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
       <div className="aspect-[4/3] bg-slate-950">
         <img
           src={images[selectedImageIndex] || metadata.image}
