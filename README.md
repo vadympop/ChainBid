@@ -289,4 +289,10 @@ AI tools were used as assistance during development, mainly for frontend impleme
 
 ## What We Learned
 
+- Smart contract development in Solidity.
+- ERC721 and ERC1155 NFT standards.
+- IPFS and how NFT metadata is stored off-chain.
+- How to structure auction logic on-chain.
+- How the frontend communicates with smart contracts.
+
 ## Conclusion
