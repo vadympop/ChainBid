@@ -2,11 +2,11 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div className="flex items-center h-full flex-1 justify-center bg-base-200">
+    <div className="flex flex-1 items-center justify-center bg-[#05070d]">
       <div className="text-center">
-        <h1 className="text-6xl font-bold m-0 mb-1">404</h1>
-        <h2 className="text-2xl font-semibold m-0">Page Not Found</h2>
-        <p className="text-base-content/70 m-0 mb-4">The page you&apos;re looking for doesn&apos;t exist.</p>
+        <p className="m-0 text-8xl font-bold text-white/5 select-none">404</p>
+        <h2 className="m-0 -mt-6 text-2xl font-semibold text-white">Page Not Found</h2>
+        <p className="m-0 mb-6 mt-2 text-sm text-slate-500">The page you&apos;re looking for doesn&apos;t exist.</p>
         <Link href="/" className="btn btn-primary">
           Go Home
         </Link>
