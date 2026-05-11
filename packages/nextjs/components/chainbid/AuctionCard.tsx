@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Address } from "viem";
 import { useReadContract } from "wagmi";
+import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
 import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chainbid";
 import type {
   AuctionRecord,
@@ -234,11 +235,19 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
   const timeTarget = isVickrey
     ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
     : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
-  const priceLabel = isEnglish ? "TOP BID" : isDutch ? "ASKING" : info.finalized ? "FINAL" : "RESERVE";
-  const timeLabel = isVickrey && (status === "commit" || status === "reveal") ? `${status.toUpperCase()} ENDS` : "ENDS";
-  const isLive = status === "active";
+  const priceLabel = info.finalized ? "FINAL" : isEnglish ? "TOP BID" : isDutch ? "ASKING" : "RESERVE";
+  const isSettled = status === "finalized" || status === "awaiting-confirmation";
+  const isEnded = status === "ended";
+  const timeLabel = isSettled
+    ? "SOLD"
+    : isEnded
+      ? "ENDED"
+      : isVickrey && (status === "commit" || status === "reveal")
+        ? `${status.toUpperCase()} ENDS`
+        : "ENDS";
+  const timeValue = isSettled || isEnded ? "—" : getTimeLeft(timeTarget, now);
   const timeLeftSeconds = Number(timeTarget) - Number(now);
-  const isUrgent = timeLeftSeconds > 0 && timeLeftSeconds < 3600;
+  const isUrgent = !isSettled && !isEnded && timeLeftSeconds > 0 && timeLeftSeconds < 3600;
 
   const typeBadgeBg = isEnglish ? "bg-blue-500/50" : isDutch ? "bg-orange-500/50" : "bg-violet-500/50";
   const typeBadgeText = isEnglish ? "text-blue-200" : isDutch ? "text-orange-200" : "text-violet-200";
@@ -274,13 +283,8 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
             </span>
           )}
         </div>
-        {/* Top-right: live indicator */}
-        {isLive && (
-          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
-          </div>
-        )}
+        {/* Top-right: status badge */}
+        <AuctionStatusBadge status={status} className="absolute right-4 top-4" />
       </div>
 
       {/* Card body */}
@@ -299,7 +303,7 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
           <div className="text-right">
             <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{timeLabel}</p>
             <p className={`m-0 mt-0.5 font-semibold tabular-nums ${isUrgent ? "text-amber-400" : "text-white"}`}>
-              {getTimeLeft(timeTarget, now)}
+              {timeValue}
             </p>
           </div>
         </div>

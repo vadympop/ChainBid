@@ -1,58 +1,41 @@
-import { AssetType, AuctionStatus, AuctionType } from "~~/types/chainbid";
-import { ASSET_TYPE_LABELS, AUCTION_TYPE_LABELS } from "~~/utils/chainbid/auction";
+import type { AuctionStatus } from "~~/types/chainbid";
 
-const statusClasses: Record<AuctionStatus, string> = {
-  active: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-  commit: "border-cyan-400/30 bg-cyan-400/10 text-cyan-100",
-  reveal: "border-violet-400/30 bg-violet-400/10 text-violet-100",
-  ended: "border-amber-400/30 bg-amber-400/10 text-amber-200",
-  finalized: "border-slate-400/30 bg-slate-400/10 text-slate-200",
-  "awaiting-confirmation": "border-blue-400/30 bg-blue-400/10 text-blue-200",
+type AuctionStatusBadgeProps = {
+  status: AuctionStatus;
+  className?: string;
 };
 
-const statusLabels: Record<AuctionStatus, string> = {
-  active: "Active",
-  commit: "Commit",
-  reveal: "Reveal",
-  ended: "Ended",
-  finalized: "Finalized",
-  "awaiting-confirmation": "Awaiting confirmation",
-};
-
-type AuctionStatusBadgeProps =
-  | {
-      kind: "status";
-      status: AuctionStatus;
-    }
-  | {
-      kind: "auction";
-      auctionType: AuctionType;
-    }
-  | {
-      kind: "asset";
-      assetType: AssetType;
-    };
-
-export const AuctionStatusBadge = (props: AuctionStatusBadgeProps) => {
-  if (props.kind === "status") {
+export const AuctionStatusBadge = ({ status, className = "" }: AuctionStatusBadgeProps) => {
+  if (status === "active" || status === "commit" || status === "reveal") {
     return (
-      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClasses[props.status]}`}>
-        {statusLabels[props.status]}
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm ${className}`}
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
       </span>
     );
   }
 
-  if (props.kind === "auction") {
+  if (status === "ended") {
     return (
-      <span className="rounded-full border border-blue-400/30 bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-100">
-        {AUCTION_TYPE_LABELS[props.auctionType]}
+      <span
+        className={`rounded-lg bg-slate-500/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-200 backdrop-blur-sm ${className}`}
+      >
+        Ended
       </span>
     );
   }
 
-  return (
-    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-200">
-      {ASSET_TYPE_LABELS[props.assetType]}
-    </span>
-  );
+  if (status === "finalized" || status === "awaiting-confirmation") {
+    return (
+      <span
+        className={`rounded-lg bg-blue-500/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-200 backdrop-blur-sm ${className}`}
+      >
+        Sold
+      </span>
+    );
+  }
+
+  return null;
 };

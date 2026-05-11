@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import type { NextPage } from "next";
 import { type Address, encodeAbiParameters, isAddress, keccak256, parseEther, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
+import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
 import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
 import { useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
@@ -370,11 +371,15 @@ const AuctionDetailPage: NextPage = () => {
     ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
     : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
 
-  const priceLabel = isEnglish ? "Top bid" : isDutch ? "Asking price" : info.finalized ? "Final price" : "Reserve";
-  const timeLabel =
-    isVickrey && (isCommitPhase || isRevealPhase)
-      ? `${status.charAt(0).toUpperCase() + status.slice(1)} ends`
-      : "Ends in";
+  const priceLabel = info.finalized ? "Final price" : isEnglish ? "Top bid" : isDutch ? "Asking price" : "Reserve";
+  const isSettled = status === "finalized" || status === "awaiting-confirmation";
+  const timeLabel = isSettled
+    ? "Sold"
+    : status === "ended"
+      ? "Ended"
+      : isVickrey && (isCommitPhase || isRevealPhase)
+        ? `${status.charAt(0).toUpperCase() + status.slice(1)} ends`
+        : "Ends in";
 
   const secondaryMetricLabel = isVickrey ? "Valid bids" : "Reserve";
   const secondaryMetricValue = isVickrey
@@ -382,7 +387,7 @@ const AuctionDetailPage: NextPage = () => {
     : formatEth(info.reservePrice);
 
   const timeLeftSeconds = Number(timeTarget) - Number(now);
-  const isUrgent = timeLeftSeconds > 0 && timeLeftSeconds < 3600;
+  const isUrgent = !isSettled && timeLeftSeconds > 0 && timeLeftSeconds < 3600;
 
   const canFinalize = isEnded && !info.finalized;
   const canConfirm = item.assetType === AssetType.Physical && info.finalized && isWinner && !info.receivedConfirmed;
@@ -457,13 +462,8 @@ const AuctionDetailPage: NextPage = () => {
               )}
             </div>
 
-            {/* Live badge */}
-            {isActive && (
-              <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
-              </div>
-            )}
+            {/* Status badge */}
+            <AuctionStatusBadge status={status} className="absolute right-3 top-3" />
           </div>
 
           {/* Thumbnails */}
@@ -539,7 +539,7 @@ const AuctionDetailPage: NextPage = () => {
               <p
                 className={`m-0 mt-0.5 text-sm font-semibold tabular-nums ${isUrgent ? "text-amber-400" : "text-white"}`}
               >
-                {getTimeLeft(timeTarget, now)}
+                {isSettled || status === "ended" ? "—" : getTimeLeft(timeTarget, now)}
               </p>
             </div>
           </div>
