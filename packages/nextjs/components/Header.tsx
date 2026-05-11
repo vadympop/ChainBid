@@ -94,12 +94,14 @@ const SidebarMenuLinks = () => {
             />
             <Link
               href={href}
-              title={label}
-              className={`flex w-full items-center justify-center py-3 transition ${
+              className={`flex w-full items-center gap-3 px-[22px] py-3 transition ${
                 isActive ? "text-white" : "text-slate-500 hover:text-white"
               }`}
             >
-              {icon}
+              <span className="shrink-0">{icon}</span>
+              <span className="overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                {label}
+              </span>
             </Link>
           </li>
         );
@@ -122,19 +124,26 @@ export const Header = () => {
 
   return (
     <>
-      {/* Desktop sidebar — narrow, icon-only */}
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-[72px] flex-col items-center border-r border-white/10 bg-[#070a12] py-4 lg:flex">
-        <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
-          <CubeIcon className="h-5 w-5 text-white" />
-        </Link>
+      {/* Desktop sidebar — expands on hover */}
+      <aside className="group fixed left-0 top-0 z-30 hidden h-screen w-[72px] flex-col items-center overflow-hidden border-r border-white/10 bg-[#070a12] py-4 transition-[width] duration-200 hover:w-[180px] lg:flex">
+        <div className="flex w-full items-center gap-3 px-[18px]">
+          <Link href="/" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
+            <CubeIcon className="h-5 w-5 text-white" />
+          </Link>
+          <span className="overflow-hidden whitespace-nowrap text-sm font-bold text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+            ChainBid
+          </span>
+        </div>
         <nav className="mt-6 w-full">
           <ul className="space-y-1">
             <SidebarMenuLinks />
           </ul>
         </nav>
-        <div className="mt-auto mb-3 flex flex-col items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-green-400" title={targetNetwork.name} />
-          <span className="text-[9px] uppercase tracking-widest text-slate-600">{targetNetwork.name.slice(0, 3)}</span>
+        <div className="mt-auto mb-3 flex w-full items-center gap-3 px-[22px]">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-green-400" title={targetNetwork.name} />
+          <span className="overflow-hidden whitespace-nowrap text-[9px] uppercase tracking-widest text-slate-600 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+            {targetNetwork.name}
+          </span>
         </div>
       </aside>
 
