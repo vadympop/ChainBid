@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { NextPage } from "next";
 import { type Address, decodeEventLog, parseEther } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
@@ -126,9 +127,22 @@ const SummaryRow = ({ label, value }: { label: string; value: string }) => (
 const FIELD =
   "w-full rounded-lg border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
 
+const auctionCreatedAbi = [
+  {
+    type: "event",
+    name: "AuctionCreated",
+    inputs: [
+      { indexed: true, name: "contractAddress", type: "address" },
+      { indexed: false, name: "auctionType", type: "uint8" },
+      { indexed: true, name: "seller", type: "address" },
+    ],
+  },
+] as const;
+
 const CreateAuctionPage: NextPage = () => {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const router = useRouter();
   const { data: factoryInfo } = useDeployedContractInfo({ contractName: "AuctionFactory" });
   const { data: nftInfo } = useDeployedContractInfo({ contractName: "AuctionNFT" });
   const { writeContractAsync: writeFactoryAsync, isMining: isCreating } = useScaffoldWriteContract({
@@ -355,18 +369,19 @@ const CreateAuctionPage: NextPage = () => {
         notification.success("Factory approved. Creating auction.");
       }
 
+      let createHash: `0x${string}` | undefined;
       if (form.auctionType === "English") {
-        await writeFactoryAsync({
+        createHash = await writeFactoryAsync({
           functionName: "createEnglishAuction",
           args: [item, reservePrice, duration],
         });
       } else if (form.auctionType === "Dutch") {
-        await writeFactoryAsync({
+        createHash = await writeFactoryAsync({
           functionName: "createDutchAuction",
           args: [item, parseEther(form.startPrice), reservePrice, duration],
         });
       } else {
-        await writeFactoryAsync({
+        createHash = await writeFactoryAsync({
           functionName: "createVickreyAuction",
           args: [
             item,
@@ -377,8 +392,29 @@ const CreateAuctionPage: NextPage = () => {
         });
       }
 
+      if (!createHash || !publicClient) return;
+
+      const createReceipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
+      let newAuctionAddress: Address | undefined;
+      for (const log of createReceipt.logs) {
+        try {
+          const decoded = decodeEventLog({ abi: auctionCreatedAbi, data: log.data, topics: log.topics });
+          if (decoded.eventName === "AuctionCreated") {
+            newAuctionAddress = decoded.args.contractAddress;
+            break;
+          }
+        } catch {
+          /* skip non-matching logs */
+        }
+      }
+
       notification.success(`${form.auctionType} auction created.`);
-      setForm(current => ({ ...initialForm, tokenContract: current.tokenContract }));
+
+      if (newAuctionAddress) {
+        router.push(`/auction/${newAuctionAddress}`);
+      } else {
+        setForm(current => ({ ...initialForm, tokenContract: current.tokenContract }));
+      }
     } catch (error) {
       notification.error(getParsedError(error));
     }
