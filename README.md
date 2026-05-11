@@ -50,6 +50,120 @@ Each item can have a title, description, asset type, and images. These files are
 
 The app stores the metadata URI and uses it to display the item information in the frontend. This lets users see what they are bidding on while keeping the blockchain storage small.
 
+## Architecture Overview
+
+ChainBid is built on top of Scaffold-ETH 2. We use the Hardhat version of Scaffold-ETH, so the project is split into two main packages:
+
+- `packages/hardhat` contains the Solidity smart contracts, deployment scripts, and tests.
+- `packages/nextjs` contains the frontend application built with Next.js.
+
+The main stack is:
+
+- Solidity for the smart contracts
+- Hardhat for compiling, testing, and deploying contracts
+- OpenZeppelin contracts for NFT standards, clone contracts, and security helpers
+- Next.js and React for the frontend
+- Wagmi and Viem for communication with the blockchain
+- RainbowKit for wallet connection
+- Pinata/IPFS for storing item images and metadata
+- Sign-In with Ethereum for protecting the metadata upload endpoint
+
+### Smart Contracts
+
+The smart contracts are the core of the application. They handle auction creation, NFT escrow, bids, payments, refunds, and final settlement.
+
+1. **AuctionFactory.sol**
+
+The `AuctionFactory.sol` is the main entry point for creating auctions. Instead of deploying a completely new full contract manually every time, the factory uses OpenZeppelin clones. This means every auction gets its own contract, but creation is cheaper because the auction contract is a lightweight clone of an existing implementation.
+
+The factory supports creating English, Dutch, and Vickrey auctions. It also validates the auction item, checks auction durations, creates the auction clone, transfers the NFT from the seller into the auction contract, and stores a list of created auctions.
+
+This is also where the NFT escrow begins. The seller approves the factory first, and then the factory transfers the NFT into the new auction contract during auction creation.
+
+2. **BaseAuction.sol**
+
+`BaseAuction.sol` contains logic shared by all auction types. It stores the auction item, seller, reserve price, end time, winner, final price, and refund balances.
+
+It also handles common behavior such as transferring the NFT, releasing payment, withdrawing refunds, and confirming receipt for physical items.
+
+For digital items, payment can be released when the auction is finalized. For physical items, the seller receives payment only after the winner confirms that they received the item.
+
+3. **EnglishAuction.sol**
+
+`EnglishAuction.sol` implements the classic open bidding auction. Users can place higher bids while the auction is active. When a new highest bid is placed, the previous highest bidder can withdraw their old bid from the contract.
+
+After the auction ends, the auction can be finalized. If the highest bid reaches the reserve price, the NFT goes to the winner and the seller receives the payment. If the auction does not reach the reserve price, the NFT is returned to the seller.
+
+4. **DutchAuction.sol**
+
+`DutchAuction.sol` implements a decreasing price auction. The seller chooses a start price, reserve price, and duration. The price decreases over time until it reaches the reserve price.
+
+A buyer can buy the item at the current price. Once that happens, the auction is finalized and no more bids are accepted.
+
+5. **VickreyAuction.sol**
+
+`VickreyAuction.sol` implements a sealed-bid second-price auction using commit-reveal.
+
+During the commit phase, bidders submit only a hash of their bid amount and secret, together with a deposit. During the reveal phase, they reveal the original bid amount and secret. The contract checks that the reveal matches the original commitment and that the deposit is large enough.
+
+The highest valid bidder wins, but the final price is based on the second-highest valid bid, or the reserve price if the second bid is lower than the reserve. Invalid reveals are blocked for that auction.
+
+6. **AuctionNFT.sol**
+
+`AuctionNFT.sol` is a simple ERC721 NFT contract used by the app for creating platform NFTs. It is useful for demos and for users who want to create an NFT-backed item directly in ChainBid.
+
+The NFT metadata points to IPFS, where the item title, description, images, and attributes are stored.
+
+7. **AuctionItem.sol**
+
+`AuctionItem.sol` contains the shared enums and structs used across the auction contracts. The enums define values such as the NFT standard, asset type, auction type, and auction state. The main struct stores the auctioned item data, including the token contract, token ID, amount, and metadata URI.
+
+### Frontend
+
+The frontend is built with Next.js and React. 
+
+Users can connect their wallet, create an NFT-backed item, upload metadata, create an auction, place bids, buy from Dutch auctions, commit and reveal Vickrey bids, finalize auctions, confirm physical item receipt, and withdraw refunds.
+
+For blockchain communication, the frontend uses Wagmi and Viem through the Scaffold-ETH hooks.
+
+RainbowKit is used for wallet connection, so users can connect with MetaMask or another supported wallet.
+
+### Metadata Upload and Pinata
+
+Images and metadata are stored off-chain on IPFS using Pinata.
+
+The frontend sends the item title, description, asset type, category, and images to a Next.js API route:
+
+```text
+/api/pinata/upload
+```
+
+The route uploads the images to Pinata, creates a metadata JSON file, uploads that metadata file to Pinata, and returns the final IPFS metadata URI to the frontend.
+
+The metadata URI is then used by the NFT and auction item, so the frontend can later display the item information and images.
+
+### Sign-In With Ethereum
+
+The Pinata upload endpoint is protected with Sign-In with Ethereum. Before a user can upload item metadata, they must sign a message with their wallet.
+
+The backend verifies the signature and creates a session. After that, the user can call the upload endpoint.
+
+We use this because the Pinata API key belongs to the server. Without authentication, anyone could call our upload endpoint and use our Pinata account. Wallet sign-in gives us a simple way to allow real connected users.
+
+## Deployment Details
+
+## Setup Instructions
+
+## Bonuses Implemented
+
+## Known Limitations
+
+## AI Usage
+
+## What We Learned
+
+## Conclusion
+
 Uses scaffold eth 2
 
 ## How to develop?
