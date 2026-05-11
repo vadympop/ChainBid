@@ -6,10 +6,11 @@ import { SiweSessionData, defaultSession, getSessionOptions } from "~~/utils/siw
 export async function GET() {
   const session = await getIronSession<SiweSessionData>(await cookies(), getSessionOptions());
 
+  const isLoggedIn = Boolean(session.isLoggedIn);
   return NextResponse.json({
-    isLoggedIn: session.isLoggedIn,
-    address: session.address,
-    chainId: session.chainId,
+    isLoggedIn,
+    address: isLoggedIn ? (session.address ?? null) : null,
+    chainId: isLoggedIn ? (session.chainId ?? null) : null,
   });
 }
 

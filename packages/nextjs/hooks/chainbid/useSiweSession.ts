@@ -48,7 +48,16 @@ export const useSiweSession = () => {
     setIsLoading(true);
     try {
       const nonceRes = await fetch("/api/siwe/nonce");
-      const { nonce } = (await nonceRes.json()) as { nonce: string };
+      if (!nonceRes.ok) {
+        notification.error("Failed to fetch sign-in nonce. Please try again.");
+        return false;
+      }
+      const nonceBody = (await nonceRes.json()) as { nonce?: string };
+      const nonce = nonceBody.nonce;
+      if (!nonce || typeof nonce !== "string" || nonce.trim() === "") {
+        notification.error("Received invalid nonce from server. Please try again.");
+        return false;
+      }
 
       const message = createSiweMessage({
         address,

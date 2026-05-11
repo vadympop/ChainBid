@@ -36,9 +36,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing Host header." }, { status: 400 });
   }
 
-  const parsed = parseSiweMessage(message);
+  let parsed: ReturnType<typeof parseSiweMessage>;
+  try {
+    parsed = parseSiweMessage(message);
+  } catch {
+    return NextResponse.json({ error: "Malformed SIWE message." }, { status: 400 });
+  }
 
-  const chain = SUPPORTED_CHAINS[parsed.chainId!];
+  if (!parsed.chainId) {
+    return NextResponse.json({ error: "SIWE message is missing chainId." }, { status: 400 });
+  }
+
+  if (!parsed.address) {
+    return NextResponse.json({ error: "SIWE message is missing address." }, { status: 400 });
+  }
+
+  const chain = SUPPORTED_CHAINS[parsed.chainId];
   if (!chain) {
     return NextResponse.json({ error: "Unsupported chain." }, { status: 400 });
   }
