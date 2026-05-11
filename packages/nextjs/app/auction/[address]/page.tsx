@@ -7,13 +7,18 @@ import { useParams } from "next/navigation";
 import type { NextPage } from "next";
 import { type Address, encodeAbiParameters, isAddress, keccak256, parseEther, zeroAddress } from "viem";
 import { useAccount, usePublicClient, useReadContract } from "wagmi";
+import { AlertBox } from "~~/components/chainbid/AlertBox";
+import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
+import { DataGrid } from "~~/components/chainbid/DataGrid";
+import { FormFieldLabel } from "~~/components/chainbid/FormFieldLabel";
+import { ImageThumbnailGrid } from "~~/components/chainbid/ImageThumbnailGrid";
+import { TxButton } from "~~/components/chainbid/TxButton";
 import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
-import { useChainBidWriteContract } from "~~/hooks/chainbid";
+import { useChainBidMetadata, useChainBidWriteContract } from "~~/hooks/chainbid";
 import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import { AssetType, AuctionType, TokenType } from "~~/types/chainbid";
 import type {
   AuctionRecord,
-  ChainBidMetadata,
   DutchAuctionInfo,
   EnglishAuctionInfo,
   VickreyAuctionInfo,
@@ -35,13 +40,10 @@ import {
   isZeroAddress,
   normalizeAuctionItem,
 } from "~~/utils/chainbid/auction";
-import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
+import { fieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
 
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
-
-const FIELD =
-  "w-full rounded-lg border border-white/10 bg-[#070d1a] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50";
 
 const isBytes32Hex = (value: string): value is `0x${string}` => /^0x[0-9a-fA-F]{64}$/.test(value);
 
@@ -83,13 +85,13 @@ const AuctionDetailPage: NextPage = () => {
   const publicClient = usePublicClient();
   const { writeContractAsync, isPending } = useChainBidWriteContract();
   const now = useAuctionNow();
+  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const isBusy = isPending || activeAction !== null;
   const [bidAmount, setBidAmount] = useState("");
   const [commitBidAmount, setCommitBidAmount] = useState("");
   const [commitDeposit, setCommitDeposit] = useState("");
   const [revealBidAmount, setRevealBidAmount] = useState("");
   const [vickreySecret, setVickreySecret] = useState("");
-  const [metadata, setMetadata] = useState<ChainBidMetadata>();
-  const [isMetadataLoading, setIsMetadataLoading] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
   const vickreyStorageKey = useMemo(() => {
@@ -178,7 +180,7 @@ const AuctionDetailPage: NextPage = () => {
     args: [connectedAddress || zeroAddress],
     query: { enabled: Boolean(auctionAddress && connectedAddress && isVickrey) },
   });
-  const { data: pendingReturns } = useReadContract({
+  const { data: pendingReturns, refetch: refetchPendingReturns } = useReadContract({
     address: auctionAddress,
     abi: auctionAbi,
     functionName: "pendingReturns",
@@ -202,6 +204,7 @@ const AuctionDetailPage: NextPage = () => {
   });
 
   const tokenUri = item?.metadataURI || erc721TokenUri || erc1155TokenUri || "";
+  const { metadata, isLoading: isMetadataLoading } = useChainBidMetadata(tokenUri, item?.tokenContract, item?.tokenId);
 
   const images = useMemo(() => {
     if (!metadata) return [];
@@ -211,21 +214,6 @@ const AuctionDetailPage: NextPage = () => {
   useEffect(() => {
     setSelectedImageIndex(0);
   }, [metadata]);
-
-  useEffect(() => {
-    if (!tokenUri || !item) return;
-    let ignore = false;
-    setIsMetadataLoading(true);
-    fetchChainBidMetadata(tokenUri, { contractAddress: item.tokenContract, tokenId: item.tokenId }).then(result => {
-      if (!ignore) {
-        setMetadata(result);
-        setIsMetadataLoading(false);
-      }
-    });
-    return () => {
-      ignore = true;
-    };
-  }, [item, tokenUri]);
 
   useEffect(() => {
     if (!vickreyStorageKey) {
@@ -259,14 +247,17 @@ const AuctionDetailPage: NextPage = () => {
       await refetchVickreyCommitment();
       await refetchVickreyBlocked();
     }
+    await refetchPendingReturns();
   };
 
   const runAuctionTx = async (
+    actionKey: string,
     label: string,
     request: Parameters<typeof writeContractAsync>[0] & { value?: bigint },
     onSuccess?: () => void,
   ) => {
     if (!auctionAddress) return;
+    setActiveAction(actionKey);
     try {
       notification.info(label);
       const hash = await writeContractAsync(request);
@@ -277,6 +268,8 @@ const AuctionDetailPage: NextPage = () => {
       await refetchInfo();
     } catch (error) {
       notification.error(getParsedError(error));
+    } finally {
+      setActiveAction(null);
     }
   };
 
@@ -370,11 +363,15 @@ const AuctionDetailPage: NextPage = () => {
     ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
     : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
 
-  const priceLabel = isEnglish ? "Top bid" : isDutch ? "Asking price" : info.finalized ? "Final price" : "Reserve";
-  const timeLabel =
-    isVickrey && (isCommitPhase || isRevealPhase)
-      ? `${status.charAt(0).toUpperCase() + status.slice(1)} ends`
-      : "Ends in";
+  const priceLabel = info.finalized ? "Final price" : isEnglish ? "Top bid" : isDutch ? "Asking price" : "Reserve";
+  const isSettled = status === "finalized" || status === "awaiting-confirmation";
+  const timeLabel = isSettled
+    ? "Sold"
+    : status === "ended"
+      ? "Ended"
+      : isVickrey && (isCommitPhase || isRevealPhase)
+        ? `${status.charAt(0).toUpperCase() + status.slice(1)} ends`
+        : "Ends in";
 
   const secondaryMetricLabel = isVickrey ? "Valid bids" : "Reserve";
   const secondaryMetricValue = isVickrey
@@ -382,7 +379,7 @@ const AuctionDetailPage: NextPage = () => {
     : formatEth(info.reservePrice);
 
   const timeLeftSeconds = Number(timeTarget) - Number(now);
-  const isUrgent = timeLeftSeconds > 0 && timeLeftSeconds < 3600;
+  const isUrgent = !isSettled && timeLeftSeconds > 0 && timeLeftSeconds < 3600;
 
   const canFinalize = isEnded && !info.finalized;
   const canConfirm = item.assetType === AssetType.Physical && info.finalized && isWinner && !info.receivedConfirmed;
@@ -457,32 +454,17 @@ const AuctionDetailPage: NextPage = () => {
               )}
             </div>
 
-            {/* Live badge */}
-            {isActive && (
-              <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
-              </div>
-            )}
+            {/* Status badge */}
+            <AuctionStatusBadge status={status} className="absolute right-3 top-3" />
           </div>
 
           {/* Thumbnails */}
-          {images.length > 1 && (
-            <div className="grid grid-cols-5 gap-2 p-3">
-              {images.map((img, i) => (
-                <button
-                  key={img}
-                  type="button"
-                  onClick={() => setSelectedImageIndex(i)}
-                  className={`aspect-square overflow-hidden rounded-xl border transition ${
-                    selectedImageIndex === i ? "border-blue-400" : "border-white/10 hover:border-white/30"
-                  }`}
-                >
-                  <img src={img} alt={`Image ${i + 1}`} className="h-full w-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
+          <ImageThumbnailGrid
+            images={images}
+            selectedIndex={selectedImageIndex}
+            onSelect={setSelectedImageIndex}
+            className="p-3"
+          />
         </div>
 
         {/* Provenance & details */}
@@ -490,21 +472,16 @@ const AuctionDetailPage: NextPage = () => {
           <p className="border-b border-white/5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
             Provenance & details
           </p>
-          <div className="grid grid-cols-2 gap-px bg-white/5">
-            {[
+          <DataGrid
+            data={[
               ["Contract", compactAddress(item.tokenContract)],
               ["Token ID", `#${item.tokenId}`],
               ["Standard", TOKEN_TYPE_LABELS[item.tokenType]],
               ["Amount", item.amount.toString()],
               ["Seller", compactAddress(info.seller)],
               ["Winner", isZeroAddress(info.winner) ? "None" : compactAddress(info.winner)],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-[#0a1224] px-4 py-3">
-                <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{label}</p>
-                <p className="m-0 mt-1 break-all font-mono text-xs text-white">{value}</p>
-              </div>
-            ))}
-          </div>
+            ]}
+          />
         </div>
       </aside>
 
@@ -539,7 +516,7 @@ const AuctionDetailPage: NextPage = () => {
               <p
                 className={`m-0 mt-0.5 text-sm font-semibold tabular-nums ${isUrgent ? "text-amber-400" : "text-white"}`}
               >
-                {getTimeLeft(timeTarget, now)}
+                {isSettled || status === "ended" ? "—" : getTimeLeft(timeTarget, now)}
               </p>
             </div>
           </div>
@@ -549,19 +526,15 @@ const AuctionDetailPage: NextPage = () => {
         <div className="space-y-4 rounded-2xl border border-white/10 bg-[#0a1224] p-5">
           <h3 className="m-0 text-base font-semibold text-white">Place bid</h3>
 
-          {!connectedAddress && (
-            <p className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-3 text-sm text-blue-100">
-              Connect your wallet to use auction actions.
-            </p>
-          )}
+          {!connectedAddress && <AlertBox variant="info">Connect your wallet to use auction actions.</AlertBox>}
 
           {/* English bid */}
           {isEnglish && (
             <div className="flex gap-3">
               <div className="relative flex-1">
                 <input
-                  className={FIELD}
-                  disabled={!isActive || isSeller || isPending}
+                  className={fieldClass}
+                  disabled={!isActive || isSeller || isBusy}
                   inputMode="decimal"
                   min="0"
                   onChange={e => setBidAmount(e.target.value)}
@@ -574,11 +547,12 @@ const AuctionDetailPage: NextPage = () => {
                   ETH
                 </span>
               </div>
-              <button
-                className="shrink-0 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!isActive || isSeller || !bidAmount || isPending}
+              <TxButton
+                className="shrink-0"
+                disabled={!isActive || isSeller || !bidAmount || isBusy}
+                isLoading={activeAction === "bid"}
                 onClick={() =>
-                  runAuctionTx("Submitting bid.", {
+                  runAuctionTx("bid", "Submitting bid.", {
                     address: auctionAddress,
                     abi: englishAuctionAbi,
                     functionName: "bid",
@@ -588,48 +562,44 @@ const AuctionDetailPage: NextPage = () => {
                 type="button"
               >
                 Bid
-              </button>
+              </TxButton>
             </div>
           )}
 
           {/* Dutch buy */}
           {isDutch && (
-            <button
-              className="w-full rounded-xl bg-blue-600 py-3 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!isActive || isSeller || isPending}
+            <TxButton
+              className="w-full py-3"
+              disabled={!isActive || isSeller || isBusy}
+              isLoading={activeAction === "buy"}
               onClick={() =>
-                runAuctionTx("Buying Dutch auction at current price.", {
+                runAuctionTx("buy", "Buying Dutch auction at current price.", {
                   address: auctionAddress,
                   abi: dutchAuctionAbi,
                   functionName: "buy",
                   value: price,
                 } as Parameters<typeof writeContractAsync>[0] & { value: bigint })
               }
-              type="button"
             >
               Buy for {formatEth(price)}
-            </button>
+            </TxButton>
           )}
 
           {/* Vickrey */}
           {isVickrey && (
             <div className="space-y-4">
               {Boolean(isVickreyBlocked) && (
-                <p className="rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-100">
-                  This wallet is blocked for this auction after an invalid reveal.
-                </p>
+                <AlertBox variant="error">This wallet is blocked for this auction after an invalid reveal.</AlertBox>
               )}
 
               {isCommitPhase && (
                 <div className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Private bid (ETH)
-                      </p>
+                      <FormFieldLabel>Private bid (ETH)</FormFieldLabel>
                       <input
-                        className={FIELD}
-                        disabled={isSeller || isPending || hasVickreyCommitment}
+                        className={fieldClass}
+                        disabled={isSeller || isBusy || hasVickreyCommitment}
                         inputMode="decimal"
                         min="0"
                         onChange={e => setCommitBidAmount(e.target.value)}
@@ -640,12 +610,10 @@ const AuctionDetailPage: NextPage = () => {
                       />
                     </div>
                     <div>
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                        Deposit (ETH)
-                      </p>
+                      <FormFieldLabel>Deposit (ETH)</FormFieldLabel>
                       <input
-                        className={FIELD}
-                        disabled={isSeller || isPending || hasVickreyCommitment}
+                        className={fieldClass}
+                        disabled={isSeller || isBusy || hasVickreyCommitment}
                         inputMode="decimal"
                         min="0"
                         onChange={e => setCommitDeposit(e.target.value)}
@@ -657,20 +625,18 @@ const AuctionDetailPage: NextPage = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Secret
-                    </p>
+                    <FormFieldLabel>Secret</FormFieldLabel>
                     <div className="flex overflow-hidden rounded-xl border border-white/10 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/20">
                       <input
                         className="min-w-0 flex-1 bg-[#070d1a] px-3 py-2.5 font-mono text-xs text-white placeholder:text-slate-600 outline-none disabled:opacity-50"
-                        disabled={isPending || hasVickreyCommitment}
+                        disabled={isBusy || hasVickreyCommitment}
                         onChange={e => setVickreySecret(e.target.value)}
                         placeholder="0x..."
                         value={vickreySecret}
                       />
                       <button
                         className="shrink-0 border-l border-white/10 bg-white/5 px-3 text-xs font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
-                        disabled={isPending || hasVickreyCommitment}
+                        disabled={isBusy || hasVickreyCommitment}
                         onClick={handleGenerateVickreySecret}
                         type="button"
                       >
@@ -684,11 +650,13 @@ const AuctionDetailPage: NextPage = () => {
                       {vickreyCommitmentHash}
                     </div>
                   )}
-                  <button
-                    className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canCommitVickrey || isPending}
+                  <TxButton
+                    className="w-full py-2.5"
+                    disabled={!canCommitVickrey || isBusy}
+                    isLoading={activeAction === "commit"}
                     onClick={() =>
                       runAuctionTx(
+                        "commit",
                         "Submitting Vickrey commitment.",
                         {
                           address: auctionAddress,
@@ -708,19 +676,21 @@ const AuctionDetailPage: NextPage = () => {
                     type="button"
                   >
                     Commit bid
-                  </button>
+                  </TxButton>
+                  <AlertBox variant="warning">
+                    Save your <strong>secret</strong> and <strong>bid amount</strong> — you will need both to reveal
+                    your bid in the next phase. Without them you cannot reveal, so your bid will not count.
+                  </AlertBox>
                 </div>
               )}
 
               {isRevealPhase && (
                 <div className="space-y-3">
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Bid amount (ETH)
-                    </p>
+                    <FormFieldLabel>Bid amount (ETH)</FormFieldLabel>
                     <input
-                      className={FIELD}
-                      disabled={isPending || Boolean(userVickreyCommitment?.revealed)}
+                      className={fieldClass}
+                      disabled={isBusy || Boolean(userVickreyCommitment?.revealed)}
                       inputMode="decimal"
                       min="0"
                       onChange={e => setRevealBidAmount(e.target.value)}
@@ -731,22 +701,21 @@ const AuctionDetailPage: NextPage = () => {
                     />
                   </div>
                   <div>
-                    <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                      Secret
-                    </p>
+                    <FormFieldLabel>Secret</FormFieldLabel>
                     <input
-                      className={FIELD + " font-mono text-xs"}
-                      disabled={isPending || Boolean(userVickreyCommitment?.revealed)}
+                      className={fieldClass + " font-mono text-xs"}
+                      disabled={isBusy || Boolean(userVickreyCommitment?.revealed)}
                       onChange={e => setVickreySecret(e.target.value)}
                       placeholder="0x..."
                       value={vickreySecret}
                     />
                   </div>
-                  <button
-                    className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canRevealVickrey || isPending}
+                  <TxButton
+                    className="w-full py-2.5"
+                    disabled={!canRevealVickrey || isBusy}
+                    isLoading={activeAction === "reveal"}
                     onClick={() =>
-                      runAuctionTx("Revealing Vickrey bid.", {
+                      runAuctionTx("reveal", "Revealing Vickrey bid.", {
                         address: auctionAddress,
                         abi: vickreyAuctionAbi,
                         functionName: "reveal",
@@ -756,69 +725,93 @@ const AuctionDetailPage: NextPage = () => {
                     type="button"
                   >
                     Reveal bid
-                  </button>
+                  </TxButton>
                 </div>
               )}
 
               {!isCommitPhase && !isRevealPhase && !hasVickreyCommitment && (
-                <p className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-400">
-                  No commitment found for this wallet.
-                </p>
+                <AlertBox variant="neutral">No commitment found for this wallet.</AlertBox>
               )}
             </div>
           )}
 
           {/* Secondary actions */}
           <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
-            <button
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!hasRefund || isPending}
+            <TxButton
+              variant="secondary"
+              disabled={!hasRefund || isBusy}
+              isLoading={activeAction === "withdraw"}
               onClick={() =>
-                runAuctionTx("Withdrawing refundable bid balance.", {
+                runAuctionTx("withdraw", "Withdrawing refundable bid balance.", {
                   address: auctionAddress,
                   abi: auctionAbi,
                   functionName: "withdraw",
                 })
               }
-              type="button"
             >
-              Withdraw {hasRefund ? `(${formatEth(pendingReturns)})` : "refund"}
-            </button>
-            <button
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canFinalize || isPending}
+              Withdraw{hasRefund ? ` (${formatEth(pendingReturns)})` : " refund"}
+            </TxButton>
+            <TxButton
+              variant="secondary"
+              disabled={!canFinalize || isBusy}
+              isLoading={activeAction === "finalize"}
               onClick={() =>
-                runAuctionTx("Finalizing auction.", {
+                runAuctionTx("finalize", "Finalizing auction.", {
                   address: auctionAddress,
                   abi: auctionAbi,
                   functionName: "finalize",
                 })
               }
-              type="button"
             >
               Finalize
-            </button>
-            <button
-              className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!canConfirm || isPending}
+            </TxButton>
+            <TxButton
+              variant="secondary"
+              disabled={!canConfirm || isBusy}
+              isLoading={activeAction === "confirm"}
               onClick={() =>
-                runAuctionTx("Confirming physical item receipt.", {
+                runAuctionTx("confirm", "Confirming physical item receipt.", {
                   address: auctionAddress,
                   abi: auctionAbi,
                   functionName: "confirmReceived",
                 })
               }
-              type="button"
             >
               Confirm received
-            </button>
+            </TxButton>
           </div>
 
-          {item.assetType === AssetType.Physical && (
-            <p className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
+          {item.assetType === AssetType.Physical && !info.finalized && (
+            <AlertBox variant="warning">
               This NFT represents a claim certificate. Delivery and identity checks happen off-chain; on-chain
               confirmation releases payment after the winner receives the physical item.
-            </p>
+            </AlertBox>
+          )}
+
+          {item.assetType === AssetType.Physical &&
+            info.finalized &&
+            !isZeroAddress(info.winner) &&
+            !info.receivedConfirmed &&
+            isSeller && (
+              <AlertBox variant="warning">
+                Payment is held in escrow. Once the buyer receives the physical item and clicks{" "}
+                <strong>Confirm received</strong> from their wallet, funds will be released to you automatically.
+              </AlertBox>
+            )}
+
+          {item.assetType === AssetType.Physical &&
+            info.finalized &&
+            !isZeroAddress(info.winner) &&
+            !info.receivedConfirmed &&
+            isWinner && (
+              <AlertBox variant="success">
+                You won this auction. Once you receive the physical item, click <strong>Confirm received</strong> above
+                to release payment to the seller.
+              </AlertBox>
+            )}
+
+          {item.assetType === AssetType.Physical && info.receivedConfirmed && (
+            <AlertBox variant="neutral">Receipt confirmed — payment has been released to the seller.</AlertBox>
           )}
         </div>
       </section>

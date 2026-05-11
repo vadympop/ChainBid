@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
+import { ImageThumbnailGrid } from "~~/components/chainbid/ImageThumbnailGrid";
 import { ChainBidMetadata } from "~~/types/chainbid";
 
 type NftMetadataPreviewProps = {
@@ -14,7 +15,6 @@ export const NftMetadataPreview = ({ metadata, isLoading, tokenLabel }: NftMetad
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const images = useMemo(() => {
     if (!metadata) return [];
-
     return [metadata.image, ...metadata.images].filter(
       (image, index, values) => image && values.indexOf(image) === index,
     );
@@ -53,23 +53,7 @@ export const NftMetadataPreview = ({ metadata, isLoading, tokenLabel }: NftMetad
       </div>
       <div className="space-y-3 p-4">
         {tokenLabel && <p className="m-0 text-xs font-semibold uppercase tracking-wide text-blue-200">{tokenLabel}</p>}
-        {images.length > 1 && (
-          <div className="grid grid-cols-5 gap-2">
-            {images.map((image, index) => (
-              <button
-                aria-label={`Show image ${index + 1}`}
-                className={`aspect-square overflow-hidden rounded-md border bg-slate-950 transition ${
-                  selectedImageIndex === index ? "border-blue-400" : "border-white/10 hover:border-blue-400/60"
-                }`}
-                key={image}
-                onClick={() => setSelectedImageIndex(index)}
-                type="button"
-              >
-                <img src={image} alt={`${metadata.name} ${index + 1}`} className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
-        )}
+        <ImageThumbnailGrid images={images} selectedIndex={selectedImageIndex} onSelect={setSelectedImageIndex} />
         <div>
           <h3 className="m-0 text-lg font-semibold text-white">{metadata.name}</h3>
           <p className="m-0 mt-1 line-clamp-3 text-sm text-slate-400">{metadata.description || "No description."}</p>

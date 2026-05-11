@@ -1,21 +1,18 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { Address } from "viem";
 import { useReadContract } from "wagmi";
+import { AuctionStatusBadge } from "~~/components/chainbid/AuctionStatusBadge";
+import { useChainBidMetadata } from "~~/hooks/chainbid";
 import { AssetType, AuctionStatus, AuctionType, TokenType } from "~~/types/chainbid";
-import type {
-  AuctionRecord,
-  ChainBidMetadata,
-  DutchAuctionInfo,
-  EnglishAuctionInfo,
-  VickreyAuctionInfo,
-} from "~~/types/chainbid";
+import type { AuctionRecord, DutchAuctionInfo, EnglishAuctionInfo, VickreyAuctionInfo } from "~~/types/chainbid";
 import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi, vickreyAuctionAbi } from "~~/utils/chainbid/abis";
 import {
   AUCTION_REFRESH_INTERVAL_MS,
+  AUCTION_TYPE_LABELS,
   compactAddress,
   formatEth,
   getAuctionStatus,
@@ -27,7 +24,6 @@ import {
   getVickreyPrice,
   normalizeAuctionItem,
 } from "~~/utils/chainbid/auction";
-import { fetchChainBidMetadata } from "~~/utils/chainbid/ipfs";
 
 export type AuctionCardResolvedData = {
   name: string;
@@ -43,18 +39,11 @@ type AuctionCardProps = {
   onResolved?: (address: Address, data: AuctionCardResolvedData) => void;
 };
 
-const getRecordTypeLabel = (auctionType: AuctionType) => {
-  if (auctionType === AuctionType.English) return "English";
-  if (auctionType === AuctionType.Dutch) return "Dutch";
-  return "Vickrey";
-};
-
 export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
-  const [metadata, setMetadata] = useState<ChainBidMetadata>();
   const isEnglish = Number(record.auctionType) === AuctionType.English;
   const isDutch = Number(record.auctionType) === AuctionType.Dutch;
   const isVickrey = Number(record.auctionType) === AuctionType.Vickrey;
-  const recordTypeLabel = getRecordTypeLabel(Number(record.auctionType) as AuctionType);
+  const recordTypeLabel = AUCTION_TYPE_LABELS[Number(record.auctionType) as AuctionType];
 
   const { data: englishInfo, isLoading: isEnglishLoading } = useReadContract({
     address: record.contractAddress,
@@ -124,24 +113,11 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
   });
 
   const tokenUri = item?.metadataURI || erc721TokenUri || erc1155TokenUri || "";
+  const { metadata } = useChainBidMetadata(tokenUri, item?.tokenContract, item?.tokenId);
 
-  useEffect(() => {
-    if (!tokenUri || !item) return;
-
-    let ignore = false;
-    fetchChainBidMetadata(tokenUri, { contractAddress: item.tokenContract, tokenId: item.tokenId }).then(result => {
-      if (!ignore) setMetadata(result);
-    });
-
-    return () => {
-      ignore = true;
-    };
-  }, [item, tokenUri]);
-
-  useEffect(() => {
-    if (!onResolved || !info || !item) return;
-
-    const resolvedStatus = isVickrey
+  const resolved = useMemo(() => {
+    if (!info || !item) return null;
+    const status = isVickrey
       ? getVickreyAuctionStatus(
           (info as VickreyAuctionInfo).commitEndTime,
           (info as VickreyAuctionInfo).revealEndTime,
@@ -159,40 +135,34 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
           info.receivedConfirmed,
           now,
         );
-
-    const resolvedPrice = isEnglish
+    const price = isEnglish
       ? getEnglishPrice(info as EnglishAuctionInfo)
       : isDutch && (info as DutchAuctionInfo).finalized
         ? getDutchPrice(info as DutchAuctionInfo)
         : isDutch
           ? (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo))
           : getVickreyPrice(info as VickreyAuctionInfo);
-
-    const resolvedEndTime = isVickrey
+    const timeTarget = isVickrey
+      ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
+      : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
+    const endTime = isVickrey
       ? (info as VickreyAuctionInfo).revealEndTime
       : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
+    return { status, price, timeTarget, endTime };
+  }, [info, item, isVickrey, isEnglish, isDutch, dutchCurrentPrice, now]);
 
+  useEffect(() => {
+    if (!onResolved || !resolved || !item) return;
     onResolved(record.contractAddress, {
       name: metadata?.name ?? "",
-      price: resolvedPrice,
-      endTime: resolvedEndTime,
-      status: resolvedStatus,
+      price: resolved.price,
+      endTime: resolved.endTime,
+      status: resolved.status,
       assetType: item.assetType === AssetType.Digital ? "Digital" : "Physical",
     });
-  }, [
-    onResolved,
-    record.contractAddress,
-    info,
-    item,
-    metadata?.name,
-    now,
-    dutchCurrentPrice,
-    isVickrey,
-    isEnglish,
-    isDutch,
-  ]);
+  }, [onResolved, record.contractAddress, resolved, item, metadata?.name]);
 
-  if (!info || !item) {
+  if (!resolved || !item) {
     return (
       <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0a1224]">
         <div className="skeleton aspect-[4/3] w-full bg-white/10" />
@@ -205,40 +175,21 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
     );
   }
 
-  const status = isVickrey
-    ? getVickreyAuctionStatus(
-        (info as VickreyAuctionInfo).commitEndTime,
-        (info as VickreyAuctionInfo).revealEndTime,
-        info.finalized,
-        item.assetType,
-        info.winner,
-        info.receivedConfirmed,
-        now,
-      )
-    : getAuctionStatus(
-        (info as EnglishAuctionInfo | DutchAuctionInfo).endTime,
-        info.finalized,
-        item.assetType,
-        info.winner,
-        info.receivedConfirmed,
-        now,
-      );
-  const price = isEnglish
-    ? getEnglishPrice(info as EnglishAuctionInfo)
-    : isDutch && (info as DutchAuctionInfo).finalized
-      ? getDutchPrice(info as DutchAuctionInfo)
-      : isDutch
-        ? (dutchCurrentPrice ?? getDutchPrice(info as DutchAuctionInfo))
-        : getVickreyPrice(info as VickreyAuctionInfo);
+  const { status, price, timeTarget } = resolved;
   const isPhysical = item.assetType === AssetType.Physical;
-  const timeTarget = isVickrey
-    ? getVickreyPhaseEndTime(info as VickreyAuctionInfo, now)
-    : (info as EnglishAuctionInfo | DutchAuctionInfo).endTime;
-  const priceLabel = isEnglish ? "TOP BID" : isDutch ? "ASKING" : info.finalized ? "FINAL" : "RESERVE";
-  const timeLabel = isVickrey && (status === "commit" || status === "reveal") ? `${status.toUpperCase()} ENDS` : "ENDS";
-  const isLive = status === "active";
+  const priceLabel = info!.finalized ? "FINAL" : isEnglish ? "TOP BID" : isDutch ? "ASKING" : "RESERVE";
+  const isSettled = status === "finalized" || status === "awaiting-confirmation";
+  const isEnded = status === "ended";
+  const timeLabel = isSettled
+    ? "SOLD"
+    : isEnded
+      ? "ENDED"
+      : isVickrey && (status === "commit" || status === "reveal")
+        ? `${status.toUpperCase()} ENDS`
+        : "ENDS";
+  const timeValue = isSettled || isEnded ? "—" : getTimeLeft(timeTarget, now);
   const timeLeftSeconds = Number(timeTarget) - Number(now);
-  const isUrgent = timeLeftSeconds > 0 && timeLeftSeconds < 3600;
+  const isUrgent = !isSettled && !isEnded && timeLeftSeconds > 0 && timeLeftSeconds < 3600;
 
   const typeBadgeBg = isEnglish ? "bg-blue-500/50" : isDutch ? "bg-orange-500/50" : "bg-violet-500/50";
   const typeBadgeText = isEnglish ? "text-blue-200" : isDutch ? "text-orange-200" : "text-violet-200";
@@ -249,11 +200,15 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
       className="group overflow-hidden rounded-3xl border border-white/10 bg-[#0a1224] transition hover:-translate-y-0.5 hover:border-blue-500/40"
     >
       {/* Image with overlay badges */}
-      <div className="relative aspect-[4/4] rounded-xl bg-slate-950">
+      <div className="relative aspect-[4/4] p-2">
         {metadata?.image ? (
-          <img src={metadata.image} alt={metadata.name} className="h-full w-full object-cover" />
+          <img
+            src={metadata.image}
+            alt={metadata.name}
+            className="h-full w-full bg-slate-900 rounded-2xl object-cover"
+          />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-slate-600">
+          <div className="flex h-full items-center justify-center rounded-2xl bg-slate-900 text-sm text-slate-600">
             {isEnglishLoading || isDutchLoading || isVickreyLoading ? "Loading…" : "Metadata pending"}
           </div>
         )}
@@ -270,19 +225,14 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
             </span>
           )}
         </div>
-        {/* Top-right: live indicator */}
-        {isLive && (
-          <div className="absolute right-4 top-4 flex items-center gap-1.5 rounded-lg bg-emerald-500/70 px-2 py-0.5 backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200">Live</span>
-          </div>
-        )}
+        {/* Top-right: status badge */}
+        <AuctionStatusBadge status={status} className="absolute right-4 top-4" />
       </div>
 
       {/* Card body */}
       <div className="space-y-3 p-4">
         <div>
-          <p className="m-0 text-xs text-slate-500">{compactAddress(info.seller)}</p>
+          <p className="m-0 text-xs text-slate-500">{compactAddress(info!.seller)}</p>
           <h3 className="m-0 mt-1 truncate font-semibold text-white group-hover:text-blue-100">
             {metadata?.name || `Token #${item.tokenId.toString()}`}
           </h3>
@@ -295,7 +245,7 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
           <div className="text-right">
             <p className="m-0 text-[10px] font-semibold uppercase tracking-widest text-slate-500">{timeLabel}</p>
             <p className={`m-0 mt-0.5 font-semibold tabular-nums ${isUrgent ? "text-amber-400" : "text-white"}`}>
-              {getTimeLeft(timeTarget, now)}
+              {timeValue}
             </p>
           </div>
         </div>

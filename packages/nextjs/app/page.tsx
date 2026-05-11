@@ -5,8 +5,10 @@ import Link from "next/link";
 import type { NextPage } from "next";
 import type { Address } from "viem";
 import { useAccount } from "wagmi";
+import { AlertBox } from "~~/components/chainbid/AlertBox";
 import { AuctionCard } from "~~/components/chainbid/AuctionCard";
 import type { AuctionCardResolvedData } from "~~/components/chainbid/AuctionCard";
+import { StyledSelect } from "~~/components/chainbid/StyledSelect";
 import { useAuctionNow } from "~~/components/chainbid/useAuctionNow";
 import { useDeployedContractInfo, useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 import type { AuctionRecord, AuctionStatus } from "~~/types/chainbid";
@@ -167,17 +169,12 @@ const Home: NextPage = () => {
           />
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Sort</span>
-            <select
+            <StyledSelect
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortBy)}
-              className="rounded-xl bg-white/[0.05] px-3 py-1.5 text-sm text-white outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {sortOptions.map(opt => (
-                <option key={opt} value={opt} className="bg-[#0a1224]">
-                  {opt}
-                </option>
-              ))}
-            </select>
+              options={sortOptions}
+              className="bg-white/[0.05] py-1.5 pl-3 focus:ring-1 focus:ring-blue-500"
+            />
           </div>
         </div>
 
@@ -234,13 +231,13 @@ const Home: NextPage = () => {
       </section>
 
       {!isConnected && (
-        <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+        <AlertBox variant="info" className="rounded-2xl px-4 py-3">
           Connect your wallet to create auctions and use bid/buy actions. Browsing remains available.
-        </div>
+        </AlertBox>
       )}
 
       {!factoryInfo?.address && (
-        <div className="rounded-xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
           <h3 className="m-0 text-lg font-semibold text-white">AuctionFactory is not deployed</h3>
           <p className="m-0 mt-2 text-sm text-slate-400">
             Run `yarn deploy` against your selected network to populate deployedContracts.ts.
@@ -251,7 +248,7 @@ const Home: NextPage = () => {
       {factoryInfo?.address && isLoading && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map(index => (
-            <div key={index} className="overflow-hidden rounded-xl border border-white/10 bg-[#0a1224]">
+            <div key={index} className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a1224]">
               <div className="skeleton aspect-[4/3] w-full bg-white/10" />
               <div className="space-y-3 p-4">
                 <div className="h-4 w-1/3 rounded bg-white/10" />
@@ -264,7 +261,7 @@ const Home: NextPage = () => {
       )}
 
       {factoryInfo?.address && !isLoading && allRecords.length === 0 && (
-        <div className="rounded-xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
           <h3 className="m-0 text-lg font-semibold text-white">No auctions yet</h3>
           <p className="m-0 mt-2 text-sm text-slate-400">
             Mint a platform item or list an existing NFT to create the first auction.
@@ -276,7 +273,7 @@ const Home: NextPage = () => {
       )}
 
       {factoryInfo?.address && !isLoading && allRecords.length > 0 && records.length === 0 && (
-        <div className="rounded-xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-white/10 bg-[#0a1224] p-8 text-center">
           <p className="m-0 text-sm text-slate-400">No auctions match your filters.</p>
           <button
             type="button"
