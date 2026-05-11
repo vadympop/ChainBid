@@ -180,7 +180,7 @@ const AuctionDetailPage: NextPage = () => {
     args: [connectedAddress || zeroAddress],
     query: { enabled: Boolean(auctionAddress && connectedAddress && isVickrey) },
   });
-  const { data: pendingReturns } = useReadContract({
+  const { data: pendingReturns, refetch: refetchPendingReturns } = useReadContract({
     address: auctionAddress,
     abi: auctionAbi,
     functionName: "pendingReturns",
@@ -247,6 +247,7 @@ const AuctionDetailPage: NextPage = () => {
       await refetchVickreyCommitment();
       await refetchVickreyBlocked();
     }
+    await refetchPendingReturns();
   };
 
   const runAuctionTx = async (
