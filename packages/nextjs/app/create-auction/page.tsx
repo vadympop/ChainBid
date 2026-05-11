@@ -397,6 +397,11 @@ const CreateAuctionPage: NextPage = () => {
         ? "Dutch descending"
         : "Vickrey sealed";
 
+  const formatHoursOrMinutes = (hoursStr: string) => {
+    const h = Number(hoursStr);
+    return h < 1 ? `${Math.round(h * 60)}m` : `${hoursStr}h`;
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
       <form className="grid gap-5 lg:grid-cols-[1fr_320px]" onSubmit={handleSubmit}>
@@ -811,7 +816,7 @@ const CreateAuctionPage: NextPage = () => {
                       className="w-20 rounded-lg border border-white/10 bg-[#070d1a] px-2 py-1.5 text-right text-sm text-white outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50"
                       disabled={isPending}
                       inputMode="decimal"
-                      min="0.1"
+                      min="0.17"
                       max="168"
                       step="0.01"
                       type="number"
@@ -825,14 +830,14 @@ const CreateAuctionPage: NextPage = () => {
                   className="mt-2 w-full accent-blue-600"
                   disabled={isPending}
                   max="168"
-                  min="1"
-                  step="1"
+                  min="0.17"
+                  step="0.01"
                   type="range"
                   onChange={event => updateForm("durationHours", event.target.value)}
                   value={form.durationHours}
                 />
                 <div className="mt-1 flex justify-between text-[10px] text-slate-600">
-                  <span>1h</span>
+                  <span>10m</span>
                   <span>72h</span>
                   <span>1w</span>
                 </div>
@@ -892,18 +897,11 @@ const CreateAuctionPage: NextPage = () => {
             <SummaryRow label="Type" value={form.assetType === "Physical" ? "Physical item" : "On-chain NFT"} />
             <SummaryRow label="Format" value={formatLabel} />
             {form.auctionType !== "Vickrey" ? (
-              <SummaryRow
-                label="Duration"
-                value={
-                  Number(form.durationHours) < 1
-                    ? `${Math.round(Number(form.durationHours) * 60)}m`
-                    : `${form.durationHours}h`
-                }
-              />
+              <SummaryRow label="Duration" value={formatHoursOrMinutes(form.durationHours)} />
             ) : (
               <SummaryRow
                 label="Commit / Reveal"
-                value={`${Number(form.commitDurationHours) < 1 ? `${Math.round(Number(form.commitDurationHours) * 60)}m` : `${form.commitDurationHours}h`} / ${Number(form.revealDurationHours) < 1 ? `${Math.round(Number(form.revealDurationHours) * 60)}m` : `${form.revealDurationHours}h`}`}
+                value={`${formatHoursOrMinutes(form.commitDurationHours)} / ${formatHoursOrMinutes(form.revealDurationHours)}`}
               />
             )}
             {form.assetType === "Digital" && <SummaryRow label="Token standard" value={form.tokenType} />}
