@@ -8,6 +8,7 @@ import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { CheckCircleIcon, CubeIcon, RectangleStackIcon } from "@heroicons/react/24/outline";
 import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
+import { StyledSelect } from "~~/components/chainbid/StyledSelect";
 import { useChainBidWriteContract, useSiweSession } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { AssetType, CreateAuctionForm, TokenType } from "~~/types/chainbid";
@@ -576,14 +577,11 @@ const CreateAuctionPage: NextPage = () => {
                         <p className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
                           Category
                         </p>
-                        <select
-                          className={FIELD + " cursor-pointer"}
+                        <StyledSelect
+                          className={FIELD}
                           disabled={isMintingCert}
                           onChange={e => setPhysicalForm(f => ({ ...f, category: e.target.value }))}
-                          value={physicalForm.category}
-                        >
-                          <option value="">Select category</option>
-                          {[
+                          options={[
                             "Art",
                             "Collectibles",
                             "Electronics",
@@ -592,12 +590,10 @@ const CreateAuctionPage: NextPage = () => {
                             "Sports",
                             "Watches",
                             "Other",
-                          ].map(c => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
+                          ]}
+                          placeholder="Select category"
+                          value={physicalForm.category}
+                        />
                       </div>
                     </div>
 
