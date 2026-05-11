@@ -131,7 +131,7 @@ export const Header = () => {
   return (
     <>
       {/* Desktop sidebar — expands on hover */}
-      <aside className="group fixed left-0 top-0 z-30 hidden h-screen w-[72px] flex-col items-center overflow-hidden border-r border-white/10 bg-[#070a12] py-4 transition-[width] duration-200 hover:w-[180px] lg:flex">
+      <aside className="group fixed left-0 top-0 z-30 hidden h-screen w-[72px] flex-col items-center overflow-hidden border-r border-white/10 bg-[#070a12] py-4 transition-[width] duration-200 hover:w-[200px] lg:flex">
         <div className="flex w-full items-center gap-3 px-[20px]">
           <Link href="/" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
             <CubeIcon className="h-5 w-5 text-white" />
