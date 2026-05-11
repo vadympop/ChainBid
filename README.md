@@ -285,7 +285,7 @@ Another limitation is the physical item delivery flow. For physical auctions, th
 
 ## AI Usage
 
-AI tools were used as assistance during development, mainly for frontend implementation and writing smart contract tests. The generated suggestions were reviewed, adapted, and integrated manually by the team.
+AI tools were used as assistance during development, mainly for frontend implementation and writing smart contract tests. The generated suggestions were reviewed, adapted, and integrated manually.
 
 ## What We Learned
 
@@ -296,3 +296,5 @@ AI tools were used as assistance during development, mainly for frontend impleme
 - How the frontend communicates with smart contracts.
 
 ## Conclusion
+
+ChainBid is a publicly available dApp for NFT-backed auctions. It combines on-chain NFT escrow, ETH payments, and three different auction mechanisms: English bidding, Dutch pricing, and Vickrey sealed bidding.
