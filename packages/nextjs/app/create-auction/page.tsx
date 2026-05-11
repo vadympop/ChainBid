@@ -8,7 +8,7 @@ import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { CheckCircleIcon, CubeIcon, RectangleStackIcon } from "@heroicons/react/24/outline";
 import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
-import { useChainBidWriteContract } from "~~/hooks/chainbid";
+import { useChainBidWriteContract, useSiweSession } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { AssetType, CreateAuctionForm, TokenType } from "~~/types/chainbid";
 import type { ChainBidMetadata } from "~~/types/chainbid";
@@ -149,6 +149,7 @@ const CreateAuctionPage: NextPage = () => {
     contractName: "AuctionFactory",
   });
   const { writeContractAsync: writeTokenAsync, isPending: isApproving } = useChainBidWriteContract();
+  const { session: siweSession, isLoading: isSiweLoading, signIn: siweSignIn } = useSiweSession();
   const [form, setForm] = useState<CreateAuctionForm>(initialForm);
   const [physicalForm, setPhysicalForm] = useState<PhysicalItemForm>(initialPhysicalForm);
   const [isMintingCert, setIsMintingCert] = useState(false);
@@ -256,6 +257,12 @@ const CreateAuctionPage: NextPage = () => {
 
     try {
       setIsMintingCert(true);
+
+      if (!siweSession.isLoggedIn) {
+        notification.info("Sign the message in your wallet to authenticate the upload.");
+        const ok = await siweSignIn();
+        if (!ok) return;
+      }
 
       const uploadData = new FormData();
       uploadData.append("name", physicalForm.title);
@@ -420,7 +427,7 @@ const CreateAuctionPage: NextPage = () => {
     }
   };
 
-  const isPending = isApproving || isCreating || isMintingCert;
+  const isPending = isApproving || isCreating || isMintingCert || isSiweLoading;
   const tokenLabel = useMemo(() => {
     if (!form.tokenContract || !form.tokenId) return undefined;
     return `${form.tokenType} ${form.tokenContract.slice(0, 6)}...${form.tokenContract.slice(-4)} / #${form.tokenId}`;

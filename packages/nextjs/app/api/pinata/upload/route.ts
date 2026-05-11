@@ -1,5 +1,8 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getIronSession } from "iron-session";
 import { IPFS_GATEWAY_BASE_URL } from "~~/utils/scaffold-eth/ipfs";
+import { SiweSessionData, getSessionOptions } from "~~/utils/siwe";
 
 const PINATA_UPLOAD_URL = "https://uploads.pinata.cloud/v3/files";
 const MAX_IMAGE_COUNT = 5;
@@ -138,6 +141,12 @@ const uploadToPinata = async (file: File, jwt: string, name?: string) => {
 };
 
 export async function POST(request: Request) {
+  const session = await getIronSession<SiweSessionData>(await cookies(), getSessionOptions());
+
+  if (!session.isLoggedIn || !session.address) {
+    return NextResponse.json({ error: "Authentication required. Sign in with your wallet first." }, { status: 401 });
+  }
+
   const pinataJwt = process.env.PINATA_JWT;
 
   if (!pinataJwt) {
