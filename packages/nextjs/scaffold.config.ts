@@ -13,7 +13,7 @@ export const DEFAULT_ALCHEMY_API_KEY = "cR4WnXePioePZ5fFrnSiR";
 
 const scaffoldConfig = {
   // The networks on which your DApp is live
-  targetNetworks: [chains.hardhat],
+  targetNetworks: [process.env.NEXT_PUBLIC_ENVIRONMENT === "production" ? chains.sepolia : chains.hardhat],
 
   // The interval at which your front-end polls the RPC servers for new data
   // it has no effect if you only target the local network (default is 4000)
@@ -42,7 +42,7 @@ const scaffoldConfig = {
   // - "localOnly": only show when all target networks are local (hardhat/anvil)
   // - "allNetworks": show on any configured target networks
   // - "disabled": completely disable
-  burnerWalletMode: "localNetworksOnly",
+  burnerWalletMode: process.env.NEXT_PUBLIC_ENVIRONMENT === "production" ? "disabled" : "localNetworksOnly",
 } as const satisfies ScaffoldConfig;
 
 export default scaffoldConfig;
