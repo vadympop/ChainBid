@@ -152,6 +152,19 @@ We use this because the Pinata API key belongs to the server. Without authentica
 
 ## Deployment Details
 
+The application is deployed on Ethereum Sepolia testnet.
+
+Hosted frontend:
+
+https://chain-bid.vercel.app
+
+
+### Deployed Contracts
+
+| Contract | Network | Address | Verified contract |
+| --- | --- | --- | --- |
+| ChainBid contracts | Ethereum Sepolia | `0xCE4E8036a252c65D3422FD849461C8B836d19de5` | [Etherscan](https://sepolia.etherscan.io/address/0xCE4E8036a252c65D3422FD849461C8B836d19de5#code), [Blockscout](https://eth-sepolia.blockscout.com/address/0xCE4E8036a252c65D3422FD849461C8B836d19de5?tab=contract) |
+
 ## Setup Instructions
 
 ### 1. Install dependencies
