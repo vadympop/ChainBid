@@ -245,6 +245,38 @@ yarn coverage
 
 ## Bonuses Implemented
 
+### Hosted public frontend
+
+The frontend is deployed on Vercel and is publicly available at:
+
+```text
+https://chain-bid.vercel.app
+```
+
+### Advanced testing
+
+The smart contracts have more than 90% test coverage. The coverage report from `yarn coverage`:
+
+```text
+---------------------|----------|----------|----------|----------|----------------|
+File                 |  % Stmts | % Branch |  % Funcs |  % Lines |Uncovered Lines |
+---------------------|----------|----------|----------|----------|----------------|
+ auctions/           |      100 |    91.67 |      100 |      100 |                |
+  DutchAuction.sol   |      100 |    83.33 |      100 |      100 |                |
+  EnglishAuction.sol |      100 |      100 |      100 |      100 |                |
+  VickreyAuction.sol |      100 |    91.67 |      100 |      100 |                |
+ base/               |    96.15 |    86.67 |       90 |    94.44 |                |
+  BaseAuction.sol    |    96.15 |    86.67 |       90 |    94.44 |          43,44 |
+ factory/            |      100 |    92.31 |      100 |      100 |                |
+  AuctionFactory.sol |      100 |    92.31 |      100 |      100 |                |
+ items/              |      100 |      100 |      100 |      100 |                |
+  AuctionItem.sol    |      100 |      100 |      100 |      100 |                |
+  AuctionNFT.sol     |      100 |      100 |      100 |      100 |                |
+---------------------|----------|----------|----------|----------|----------------|
+All files            |    99.42 |    90.63 |    97.92 |    99.07 |                |
+---------------------|----------|----------|----------|----------|----------------|
+```
+
 ## Known Limitations
 
 ## AI Usage
