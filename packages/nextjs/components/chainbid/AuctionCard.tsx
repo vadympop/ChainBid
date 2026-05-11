@@ -251,7 +251,11 @@ export const AuctionCard = ({ record, now, onResolved }: AuctionCardProps) => {
       {/* Image with overlay badges */}
       <div className="relative aspect-[4/4] p-2">
         {metadata?.image ? (
-          <img src={metadata.image} alt={metadata.name} className="h-full w-full rounded-2xl object-cover" />
+          <img
+            src={metadata.image}
+            alt={metadata.name}
+            className="h-full w-full bg-slate-900 rounded-2xl object-cover"
+          />
         ) : (
           <div className="flex h-full items-center justify-center rounded-2xl bg-slate-900 text-sm text-slate-600">
             {isEnglishLoading || isDutchLoading || isVickreyLoading ? "Loading…" : "Metadata pending"}
