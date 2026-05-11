@@ -25,17 +25,17 @@ export const menuLinks: HeaderMenuLink[] = [
   {
     label: "Auctions",
     href: "/",
-    icon: <Squares2X2Icon className="h-5 w-5" />,
+    icon: <Squares2X2Icon className="h-6 w-6" />,
   },
   {
     label: "Create auction",
     href: "/create-auction",
-    icon: <PlusCircleIcon className="h-5 w-5" />,
+    icon: <PlusCircleIcon className="h-6 w-6" />,
   },
   {
     label: "Portfolio",
     href: "/portfolio",
-    icon: <RectangleStackIcon className="h-5 w-5" />,
+    icon: <RectangleStackIcon className="h-6 w-6" />,
   },
 ];
 
@@ -90,15 +90,21 @@ const SidebarMenuLinks = () => {
         return (
           <li key={href} className="relative w-full">
             <span
-              className={`absolute inset-y-1 left-0 w-0.5 rounded-r bg-blue-500 transition-opacity ${isActive ? "opacity-100" : "opacity-0"}`}
+              className={`absolute inset-y-5 left-2 w-0.5 rounded bg-blue-500 transition-opacity ${isActive ? "opacity-100" : "opacity-0"}`}
             />
             <Link
               href={href}
-              className={`flex w-full items-center gap-3 px-[22px] py-3 transition ${
-                isActive ? "text-white" : "text-slate-500 hover:text-white"
+              className={`flex w-full items-center gap-3 px-[20px] py-3 transition ${
+                isActive ? "text-blue-400" : "text-slate-500 hover:text-white"
               }`}
             >
-              <span className="shrink-0">{icon}</span>
+              <span
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition ${
+                  isActive ? "bg-blue-600/20 ring-blue-500/40" : ""
+                }`}
+              >
+                {icon}
+              </span>
               <span className="overflow-hidden whitespace-nowrap text-sm font-semibold opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                 {label}
               </span>
@@ -126,7 +132,7 @@ export const Header = () => {
     <>
       {/* Desktop sidebar — expands on hover */}
       <aside className="group fixed left-0 top-0 z-30 hidden h-screen w-[72px] flex-col items-center overflow-hidden border-r border-white/10 bg-[#070a12] py-4 transition-[width] duration-200 hover:w-[180px] lg:flex">
-        <div className="flex w-full items-center gap-3 px-[18px]">
+        <div className="flex w-full items-center gap-3 px-[20px]">
           <Link href="/" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
             <CubeIcon className="h-5 w-5 text-white" />
           </Link>
