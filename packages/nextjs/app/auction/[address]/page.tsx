@@ -24,7 +24,14 @@ import type {
   VickreyAuctionInfo,
   VickreyBidCommitment,
 } from "~~/types/chainbid";
-import { dutchAuctionAbi, englishAuctionAbi, erc721Abi, erc1155Abi, vickreyAuctionAbi } from "~~/utils/chainbid/abis";
+import {
+  bidPlacedEventAbi,
+  dutchAuctionAbi,
+  englishAuctionAbi,
+  erc721Abi,
+  erc1155Abi,
+  vickreyAuctionAbi,
+} from "~~/utils/chainbid/abis";
 import {
   AUCTION_REFRESH_INTERVAL_MS,
   TOKEN_TYPE_LABELS,
@@ -39,9 +46,12 @@ import {
   getVickreyPrice,
   isZeroAddress,
   normalizeAuctionItem,
+  timeAgo,
 } from "~~/utils/chainbid/auction";
 import { fieldClass } from "~~/utils/chainbid/styles";
 import { getParsedError, notification } from "~~/utils/scaffold-eth";
+
+type BidEntry = { bidder: Address; amount: bigint; timestamp: number };
 
 const ZERO_BYTES32 = `0x${"0".repeat(64)}` as const;
 
@@ -93,6 +103,7 @@ const AuctionDetailPage: NextPage = () => {
   const [revealBidAmount, setRevealBidAmount] = useState("");
   const [vickreySecret, setVickreySecret] = useState("");
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [bidHistory, setBidHistory] = useState<BidEntry[]>([]);
 
   const vickreyStorageKey = useMemo(() => {
     if (!auctionAddress || !connectedAddress) return undefined;
@@ -165,6 +176,67 @@ const AuctionDetailPage: NextPage = () => {
     | VickreyAuctionInfo
     | undefined;
   const item = useMemo(() => (info ? normalizeAuctionItem(info.item) : undefined), [info]);
+
+  const englishHighestBid = isEnglish ? (englishInfo as EnglishAuctionInfo | undefined)?.highestBid : undefined;
+
+  useEffect(() => {
+    if (!isEnglish || !auctionAddress || !publicClient || !record) return;
+    let cancelled = false;
+    (async () => {
+      const CHUNK = 950n;
+      const latest = await publicClient.getBlock({ blockTag: "latest" });
+      if (cancelled) return;
+
+      // record.createdAt is block.timestamp; estimate creation block number
+      const secondsAgo = latest.timestamp > record.createdAt ? latest.timestamp - record.createdAt : 0n;
+      const blocksAgo = secondsAgo / 12n + 50n;
+      const startBlock = latest.number > blocksAgo ? latest.number - blocksAgo : 0n;
+
+      type BidLog = { bidder: Address; amount: bigint; blockNumber: bigint | null };
+      const allLogs: BidLog[] = [];
+      let from = startBlock;
+      while (from <= latest.number) {
+        if (cancelled) return;
+        const to = from + CHUNK - 1n < latest.number ? from + CHUNK - 1n : latest.number;
+        const chunk = await publicClient.getLogs({
+          address: auctionAddress,
+          event: bidPlacedEventAbi,
+          fromBlock: from,
+          toBlock: to,
+        });
+        for (const log of chunk) {
+          allLogs.push({
+            bidder: log.args.bidder as Address,
+            amount: log.args.amount as bigint,
+            blockNumber: log.blockNumber,
+          });
+        }
+        from = to + 1n;
+      }
+
+      if (cancelled) return;
+      if (allLogs.length === 0) {
+        setBidHistory([]);
+        return;
+      }
+
+      const uniqueBlocks = [...new Set(allLogs.map(l => l.blockNumber).filter(Boolean))] as bigint[];
+      const blocks = await Promise.all(uniqueBlocks.map(bn => publicClient.getBlock({ blockNumber: bn })));
+      if (cancelled) return;
+      const tsMap = new Map(blocks.map(b => [b.number, Number(b.timestamp)]));
+      const entries: BidEntry[] = allLogs
+        .map(log => ({
+          bidder: log.bidder,
+          amount: log.amount,
+          timestamp: log.blockNumber !== null ? (tsMap.get(log.blockNumber) ?? 0) : 0,
+        }))
+        .reverse();
+      setBidHistory(entries);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEnglish, auctionAddress, publicClient, record, englishHighestBid]);
 
   const { data: vickreyCommitment, refetch: refetchVickreyCommitment } = useReadContract({
     address: auctionAddress,
@@ -814,6 +886,28 @@ const AuctionDetailPage: NextPage = () => {
             <AlertBox variant="neutral">Receipt confirmed — payment has been released to the seller.</AlertBox>
           )}
         </div>
+
+        {/* ── Bid history (English only) ── */}
+        {isEnglish && (
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0a1224]">
+            <p className="border-b border-white/5 px-5 py-3 text-sm font-semibold text-white">Bid history</p>
+            {bidHistory.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-slate-500">No bids placed yet.</p>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {bidHistory.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-4 px-5 py-3">
+                    <span className="flex-1 font-mono text-xs text-white">{compactAddress(entry.bidder)}</span>
+                    <span className="text-xs text-slate-500">{timeAgo(entry.timestamp, now)}</span>
+                    <span className="font-semibold text-emerald-400">
+                      Ξ {formatEth(entry.amount).replace(" ETH", "")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

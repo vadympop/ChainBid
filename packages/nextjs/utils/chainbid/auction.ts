@@ -25,6 +25,14 @@ export const AUCTION_TYPE_LABELS: Record<AuctionType, string> = {
 
 export const isZeroAddress = (value?: string) => !value || value.toLowerCase() === zeroAddress;
 
+export const timeAgo = (blockTimestamp: number, nowSeconds: bigint): string => {
+  const diff = Number(nowSeconds) - blockTimestamp;
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+};
+
 export const compactAddress = (address?: string) => {
   if (!address) return "Not set";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;

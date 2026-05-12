@@ -208,6 +208,15 @@ export const dutchAuctionAbi = [
   },
 ] as const;
 
+export const bidPlacedEventAbi = {
+  type: "event",
+  name: "BidPlaced",
+  inputs: [
+    { name: "bidder", type: "address", indexed: true },
+    { name: "amount", type: "uint256", indexed: false },
+  ],
+} as const;
+
 export const vickreyAuctionAbi = [
   ...baseAuctionAbi,
   {

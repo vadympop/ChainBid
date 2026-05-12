@@ -12,6 +12,7 @@ import { FormFieldLabel } from "~~/components/chainbid/FormFieldLabel";
 import { ImageUploader } from "~~/components/chainbid/ImageUploader";
 import { NftMetadataPreview } from "~~/components/chainbid/NftMetadataPreview";
 import { StyledSelect } from "~~/components/chainbid/StyledSelect";
+import { TxButton } from "~~/components/chainbid/TxButton";
 import { useChainBidMetadata, useChainBidWriteContract, useSiweSession } from "~~/hooks/chainbid";
 import { useDeployedContractInfo, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { AssetType, CreateAuctionForm, TokenType } from "~~/types/chainbid";
@@ -154,6 +155,7 @@ const CreateAuctionPage: NextPage = () => {
   const [form, setForm] = useState<CreateAuctionForm>(initialForm);
   const [physicalForm, setPhysicalForm] = useState<PhysicalItemForm>(initialPhysicalForm);
   const [isMintingCert, setIsMintingCert] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const tokenAddress = validateTokenAddress(form.tokenContract) ? (form.tokenContract as Address) : undefined;
   const parsedTokenId = parseTokenIdInput(form.tokenId);
@@ -317,6 +319,7 @@ const CreateAuctionPage: NextPage = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       if (form.tokenType === "ERC1155" && erc1155Balance !== undefined && parsedAmount! > erc1155Balance) {
         notification.error(`You only own ${erc1155Balance.toString()} of this ERC-1155 token.`);
@@ -409,10 +412,12 @@ const CreateAuctionPage: NextPage = () => {
       }
     } catch (error) {
       notification.error(getParsedError(error));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const isPending = isApproving || isCreating || isMintingCert || isSiweLoading;
+  const isPending = isApproving || isCreating || isMintingCert || isSiweLoading || isSubmitting;
   const tokenLabel = useMemo(() => {
     if (!form.tokenContract || !form.tokenId) return undefined;
     return `${form.tokenType} ${form.tokenContract.slice(0, 6)}...${form.tokenContract.slice(-4)} / #${form.tokenId}`;
@@ -605,19 +610,15 @@ const CreateAuctionPage: NextPage = () => {
                       />
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={
-                        isMintingCert ||
-                        !physicalForm.title ||
-                        !physicalForm.description ||
-                        physicalForm.images.length === 0
-                      }
+                    <TxButton
+                      variant="secondary"
+                      isLoading={isMintingCert}
+                      disabled={!physicalForm.title || !physicalForm.description || physicalForm.images.length === 0}
                       onClick={handleMintCertificate}
-                      className="w-full rounded-xl border border-blue-500/30 bg-blue-600/10 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="w-full rounded-xl border-blue-500/30 bg-blue-600/10 py-3 text-blue-300 hover:bg-blue-600/20"
                     >
-                      {isMintingCert ? "Minting certificate…" : "Mint NFT certificate"}
-                    </button>
+                      Mint NFT certificate
+                    </TxButton>
                   </div>
                 )}
               </>
@@ -906,13 +907,14 @@ const CreateAuctionPage: NextPage = () => {
           </div>
 
           {/* CTA */}
-          <button
-            className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 text-sm font-bold text-white transition hover:from-blue-500 hover:to-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isPending || (form.assetType === "Physical" && !isCertMinted)}
+          <TxButton
             type="submit"
+            isLoading={isPending}
+            disabled={form.assetType === "Physical" && !isCertMinted}
+            className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 hover:from-blue-500 hover:to-blue-400"
           >
-            {isPending ? "Submitting…" : "Sign & list"}
-          </button>
+            Sign & list
+          </TxButton>
           {form.assetType === "Physical" && !isCertMinted ? (
             <p className="m-0 text-center text-xs text-slate-500">Mint the NFT certificate in Step 1 first.</p>
           ) : (
